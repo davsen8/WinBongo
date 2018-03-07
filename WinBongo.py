@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 #WinBongo.py   D.Senciall  April 2015
-# update June 1 2015 to fix incorrect presure conversion in realtime data reader
+# update June 1 2015 to fix incorrect pressure conversion in realtime data reader for std-12
 """
 Elements BASED ON CODE SAMPLE FROM: matplotlib-with-wxpython-guis by E.Bendersky
 Eli Bendersky (eliben@gmail.com)
@@ -34,13 +34,15 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import \
     FigureCanvasWxAgg as FigCanvas, \
     NavigationToolbar2WxAgg as NavigationToolbar
-from mpl_toolkits.axes_grid.parasite_axes import HostAxes, ParasiteAxes
+#from mpl_toolkits.axes_grid.parasite_axes import HostAxes, ParasiteAxes   DEPRECIATED
+from mpl_toolkits.axes_grid1.parasite_axes import HostAxes, ParasiteAxes
 #from mpl_toolkits.axes_grid.parasite_axes import SubplotHost, ParasiteAxes
 import matplotlib.pyplot as plt
 import numpy as np
 # import pylab
 
 import wxSerialConfigDialog_NAFC as wxSerialConfigDialog
+import wxTerminal_NAFC
 #import wxTerminal_NAFC
 
 ID_START_RT = wx.NewId()
@@ -49,9 +51,9 @@ ID_START_ARC = wx.NewId()
 ID_STOP_ARC = wx.NewId()
 ID_SER_CONF = wx.NewId()
 
-VERSION = "V1.0 April 2015"
+VERSION = "V2.0 March 2018"
 TITLE = "WinBongo"
-DEFAULT_COM = "COM1"
+DEFAULT_COM = "COM8"
 DEFAULT_BAUD = 1200
 DEFAULT_RATE = 1   # scans per second
 
@@ -81,8 +83,8 @@ class DataGen2(object):
         else :
             self.scannum+=1
             line = text.split()
-#            scan = self.Convert.convert_simulation_b95(line)
-            scan = self.Convert.convert_archived(line)
+            scan = self.Convert.convert_simulation_b95(line)
+#            scan = self.Convert.convert_archived(line)
             scan["Et"]=str(self.scannum * DEFAULT_RATE)
 
             return (scan)
@@ -121,7 +123,7 @@ class DataGen2(object):
 #ser.timeout = None          #blocking read when using radline
 #ser.timeout = 0             #non-block read
 ########################################################################################
-class SerialSource():
+class SerialSource_STD12():
      
     def __init__(self,parent,serial):
         self.parent = parent                # needed to call the flash status bar method of Graphframe
@@ -146,7 +148,7 @@ class SerialSource():
     def open_Port(self):
         try: 
           self.ser.open()
-        except Exception, e:
+        except Exception as e:
 #          print "error open serial port: "+self.ser.port+" " + str(e)
           return(False)
         self.parent.flash_status_message("PORT OPEN "+self.ser.getPort())
@@ -176,35 +178,39 @@ class SerialSource():
 #             scan = self.Convert.convert_archived(line)
              scan["Et"]= str(time.time() - self.StartTime)             
             else:
-             scan = self.Convert.convert_raw(line)
+             scan = self.Convert.convert_STD12_raw(line)
+
         return (scan)
 
     def send_wake(self):
         self.parent.flash_status_message("WAKING STD")
         self.ser.write("\r\r\r")
-        self.ser.readline()
+        print("WAKE= " + self.ser.readline())
         
     def send_Real(self):
+
+        self.send_wake()
         self.parent.flash_status_message("SENDING REAL")
         self.ser.write("REAL\r")
         self.ser.readline()     # echo plus Cr-Lf which requires the 2nd read
         self.ser.readline()
         time.sleep(1.0)
 
-    def send_Start_STD_Data(self):
+    def send_Start_Data(self):
+        self.send_wake()
         self.ser.write("M\r")
         time.sleep(2.0)
         self.flush()
         self.parent.flash_status_message("STD DATA STARTED")
 
-    def send_Stop_STD_Data(self) :
+    def send_Stop_Data(self) :
         self.ser.write ("\r")
         self.flush()
         self.parent.flash_status_message("STD DATA STOPPED")
 
-    def send_Set_Rate(self,rate):
+    def send_Set_DataRate(self,rate):
         self.parent.flash_status_message("SETTING STD DATA RATE = "+ rate+" SCANS PER SECOND")
-        self.ser.write("SET S "+rate+"\r");
+        self.ser.write("SET S "+rate+"\r")
         self.ser.readline()
 
     def close_Port(self):
@@ -214,8 +220,181 @@ class SerialSource():
     def is_port_open(self):
         return (self.ser.isOpen())
     
-#*** END OF SerialSource Class ******************
+#*** END OF SerialSource_STD12 Class ******************
+#*******************************************  SBE19PLUS *********************************************
+class SerialSource_SBE19p():
 
+    def __init__(self, parent, serial):
+        self.parent = parent  # needed to call the flash status bar method of Graphframe
+        self.ser = serial
+        self.StartTime = 0
+        self.set_default()
+        self.Convert = ConvertClass()
+        self.scan = dict()
+
+    def set_default(self):
+        self.ser.port = DEFAULT_COM
+        self.ser.baudrate = DEFAULT_BAUD
+        self.ser.bytesize = serial.EIGHTBITS  # number of bits per bytes
+        self.ser.parity = serial.PARITY_NONE  # set parity check: no parity
+        self.ser.stopbits = serial.STOPBITS_ONE  # number of stop bits
+        self.ser.timeout = 5  # timeout block read
+        self.ser.xonxoff = True  # disable software flow control
+        self.ser.rtscts = False  # disable hardware (RTS/CTS) flow control
+        self.ser.dsrdtr = False  # disable hardware (DSR/DTR) flow control
+        self.ser.writeTimeout = 2  # timeout for write
+
+    def open_Port(self):
+        try:
+            self.ser.open()
+        except Exception as e:
+            print ("error open serial port: "+self.ser.port+" " + str(e))
+            return (False)
+#        self.parent.flash_status_message("PORT OPEN " + self.ser.getPort())
+
+        return (True)
+
+    def flush(self):
+        self.ser.flushInput()
+        line = self.ser.readline()  # ensure a full line is in buffer by discarding any stub
+
+    def next(self):
+
+        if self.StartTime == 0:
+            self.StartTime = time.time()
+
+        text = self.ser.readline()
+        if text == "":  # this is due to Cr-Lf show as 2 lines which requires the (LF)to be flushed
+            text = self.ser.readline()
+
+        if text == "":
+            self.scan["OK"] = False
+            return (self.scan)
+        else:
+            print (text)
+            line = text.split(',')
+            if SIMULATOR:
+                scan = self.Convert.convert_simulation_b95(line)
+                #             scan = self.Convert.convert_archived(line)
+                scan["Et"] = str(time.time() - self.StartTime)
+            else:
+                scan = self.Convert.convert_SBE19p_raw(line)
+        return (scan)
+    #################
+    def Send_Wake(self):
+
+        if self.ser.isOpen():
+            try:
+                self.ser.flushInput()  # flush input buffer, discarding all its contents
+                self.ser.flushOutput()  # flush output buffer, aborting current output
+
+                # and discard all that is in buffer
+
+                # write data
+                self.ser.write("\r")
+                print("write data: CR CR CR")
+                response = ""
+                status = ""
+                trys = 0
+                sleeps = 0
+                MAX_TRYS = 5
+                while (response != "S>\r\n") and (trys <= MAX_TRYS):
+                    #              self.ser.flushInput() #flush input buffer, discarding all its contents
+                    self.ser.write("\r")
+                    time.sleep(0.1)
+                    while (self.ser.inWaiting() < 4) and (sleeps < MAX_TRYS):
+                        time.sleep(0.5)
+                        sleeps += 1
+
+                    if (sleeps < MAX_TRYS):
+                        response = self.ser.readline()
+                    sleeps = 0
+
+                    trys += 1
+
+                self.ser.flushInput()  # flush input buffer, discarding all its contents
+
+                if (trys > MAX_TRYS):
+                    status = "FAIL: CAN NOT AWAKEN AFTER " + str(trys) + " TRYS : CHECK PORT,CABLES & SWITCHES"
+                else:
+                    status = "PASS: CTD AWAKE"
+
+                print("awake " + status + response + " " + str(trys))
+
+            except Exception as e1:
+                print (                "error communicating...: " + str(e1))
+                status = "FAIL: Error COMMUNICATING ON WAKEUP: CHECK SERIAL PORT#/ADAPTER " + self.ser.port
+
+        else:
+            print ("cannot open serial port " + self.ser.port)
+            status = "FAIL: PORT NOT OPEN: CHECK SERIAL PORT#/ADAPTER" + self.ser.port
+        return status
+
+
+
+    def send_Real(self):
+        self.parent.flash_status_message("SETTING CTD TO REAL TIME")
+        self.parent.flash_status_message("SENDING IGNORESWITCH")
+        self.ser.write("IGNORESWITCH=Y\r")
+        print (self.ser.readline())  # echo plus Cr-Lf which requires the 2nd read
+#        self.ser.readline()
+        self.parent.flash_status_message("SENDING OUTPUTFORMAT=3")
+        self.ser.write("OUTPUTFORMAT=3\r")
+        print (self.ser.readline())  # echo plus Cr-Lf which requires the 2nd read
+#        self.ser.readline()
+        self.parent.flash_status_message("SENDING OUTPUTSAL")
+        self.ser.write("OUTPUTSAL=Y\r")
+        print (self.ser.readline())  # echo plus Cr-Lf which requires the 2nd read
+#        self.ser.readline()
+#        self.ser.write("OUTPUTUCSD=Y\r")
+#        self.ser.readline()  # echo plus Cr-Lf which requires the 2nd read
+#        self.ser.readline()
+
+        time.sleep(1.0)
+
+    def send_Start_Data(self):
+        self.ser.write("STARTNOW\r")
+        print (self.ser.readline())
+        time.sleep(1.0)
+        self.flush()
+        self.parent.flash_status_message("CTD DATA STARTED")
+
+    def send_Stop_Data(self):
+        self.ser.write("STOP\r")
+        print ("SENDING STOP")
+        print (self.ser.readline())
+        self.flush()
+        self.parent.flash_status_message("CTD DATA STOPPED")
+
+    def send_Clear_Data(self):
+        self.ser.write("INITLOGGING\r")
+        print (self.ser.readline())
+        self.flush()
+        self.parent.flash_status_message("CTD MEMORY CLEARED")
+
+    def send_Set_DataRate(self, rate):
+        avg = str(rate*4)
+        self.parent.flash_status_message("SETTING CTD DATA RATE = " + rate + " SCANS PER SECOND")
+        self.ser.write("NAVG=" + '4' + "\r")
+        self.ser.readline()
+
+    def close_Port(self):
+        self.parent.flash_status_message("RESETTING CTD TO SELF CONTAINED")
+        self.ser.write("IGNORESWITCH=N\r")
+        self.ser.readline()  # echo plus Cr-Lf which requires the 2nd read
+        self.ser.readline()
+        self.ser.write("OUTPUTFORMAT=0\r")
+        self.ser.readline()  # echo plus Cr-Lf which requires the 2nd read
+        self.ser.readline()
+
+        self.parent.flash_status_message("PORT CLOSSING")
+        self.ser.close()
+
+    def is_port_open(self):
+        return (self.ser.isOpen())
+
+
+# *** END OF SerialSource_SBE19p Class ******************
 ## smoothed rate over Avg_interval scans
     
 class SmoothRate(object):
@@ -332,7 +511,17 @@ class GraphFrame(wx.Frame):
         wx.Frame.__init__(self, None, -1, self.title)
 
         self.ser = serial.Serial()  # Create a serial com port access instance
-        SerialSource(self,self.ser).set_default()
+        CTD = "SBE"
+
+        print ("HELLO")
+
+        if (CTD == "STD"):
+            self.SSource = SerialSource_STD12(self, self.ser)
+        elif (CTD == "SBE"):
+            self.SSource = SerialSource_SBE19p(self, self.ser)
+
+
+        self.SSource.set_default()
         self.Serial_In = None
         
         self.SRate = SmoothRate(5)  # Create a rate smoother instance
@@ -472,7 +661,7 @@ class GraphFrame(wx.Frame):
         self.GraphRun_button = wx.Button(self.panel, -1, "Start Graph/Logging")
         self.Bind(wx.EVT_BUTTON, self.on_GraphRun_button, self.GraphRun_button)
 
-        self.monitor_button = wx.Button(self.panel, -1, "Start STD Monitor")
+        self.monitor_button = wx.Button(self.panel, -1, "Start CTD Monitor")
         self.Bind(wx.EVT_BUTTON, self.on_monitor_button, self.monitor_button)
 
         self.monitor_button.Enable(False)
@@ -562,7 +751,7 @@ class GraphFrame(wx.Frame):
 
         self.host.tick_params(axis='both', which='major', labelsize=6)
 
-        self.host.set_axis_bgcolor('black')
+        self.host.set_facecolor('black')
         self.host.set_title('Bongo trace file= '+self.LogFileName, size=10)
         self.host.xaxis.set_label_coords(0.3, 0.5)
               
@@ -728,7 +917,7 @@ class GraphFrame(wx.Frame):
         self.GraphRun_button.SetLabel(label)
 
     def on_update_monitor_button(self, event):
-        label = "Stop STD Monitor" if self.MonitorRun else "Start STD Monitor"
+        label = "Stop CTD Monitor" if self.MonitorRun else "Start CTD Monitor"
         self.monitor_button.SetLabel(label)
     
     def on_cb_grid(self, event):
@@ -814,7 +1003,7 @@ class GraphFrame(wx.Frame):
            self.v_text.Data_text.SetValue(scan["Vstr"])
            self.r_text.Data_text.SetValue(Rstr)
            self.et_text.Data_text.SetValue('{:>5.4}'.format(scan["Et"]))
-           self.ctd_clock_text.Data_text.SetValue(scan["ctdclock"])
+#           self.ctd_clock_text.Data_text.SetValue(scan["ctdclock"])
         
            if self.GraphRun and self.runlogfile :
                self.ScanNum+=1
@@ -880,13 +1069,13 @@ class GraphFrame(wx.Frame):
 
         self.ser.close()
 #        wxTerminal.MyApp()
-        print "opening wx"
+#        print "opening wx"
 #        frame_terminal=wxTerminal.MyApp(0)
         frame_terminal=wxTerminal_NAFC.TerminalFrame(self, -1, "")
-        print "Show modal"
+#        print "Show modal"
 #        self.SetTopWindow(frame_terminal)
         frame_terminal.Show()
-        print "Destroying"
+#        print "Destroying"
         frame_terminal.Destroy()
 
 # Realtime -> start  opens serial port and log file for realtime data
@@ -894,7 +1083,7 @@ class GraphFrame(wx.Frame):
     def on_start_rt (self, event):
 
         if self.Serial_In == None:
-            self.Serial_In = SerialSource(self,self.ser) 
+            self.Serial_In = self.SSource
 
         self.port_open = self.Serial_In.open_Port()
         if not self.port_open :
@@ -919,8 +1108,8 @@ class GraphFrame(wx.Frame):
 # now configure the STD and start the data coming
         self.Serial_In.send_Real()
         self.interval = DEFAULT_RATE  # until there is a menu item to change it :-)
-        self.Serial_In.send_Set_Rate(str(self.interval))
-        self.Serial_In.send_Start_STD_Data()
+        self.Serial_In.send_Set_DataRate(str(self.interval))
+        self.Serial_In.send_Start_Data()
 
 # Lock out some controls like archived data play back while RealTime is running
 # set End to active Start to inactive on Realtime Memu
@@ -952,7 +1141,7 @@ class GraphFrame(wx.Frame):
         
         self.RT_source = False
         self.DataSource = None
-        self.Serial_In.send_Stop_STD_Data ()
+        self.Serial_In.send_Stop_Data ()
         self.Serial_In.close_Port ()
         self.port_open = False
         menubar = self.GetMenuBar()
@@ -1011,7 +1200,7 @@ class GraphFrame(wx.Frame):
 
     def on_set_base_header(self,event):
         xx = ShipTrip_Dialog(self,self.hd1["SHIP"],self.hd1["TRIP"],self.hd1["STN"])
-        print "before "+self.hd1["SHIP"]+" "+ self.hship
+        print ("before "+self.hd1["SHIP"]+" "+ self.hship)
 
         xx.SetBase(self.hship,self.hd1["TRIP"],self.hd1["STN"])
         res=xx.ShowModal()
@@ -1022,7 +1211,7 @@ class GraphFrame(wx.Frame):
             self.hship = xx.GetShip()
             self.hd1["TRIP"] = xx.GetTrip()
             self.hd1["STN"] = xx.GetStn()
-            print "AFTER="+self.hd1["SHIP"]+" "+ self.hship
+            print ("AFTER="+self.hd1["SHIP"]+" "+ self.hship)
             self.hship="LL"
 
             xx.Destroy()
@@ -1184,7 +1373,7 @@ class EntryPanel (wx.Panel):
 
         
     def GetShip(self):
-                print "IN MODEL="+self.ship.GetValue()
+                print ("IN MODEL="+self.ship.GetValue())
                 return self.ship.GetValue()
     def GetTrip(self):
                 return self._trip.GetValue()
@@ -1205,7 +1394,7 @@ class ConvertClass ():
 
         self.bastime = 0 
 
-    def convert_raw(self,line):
+    def convert_STD12_raw(self,line):
         scan = dict()
         scan["ctdclock"] = line[0]
         xdatetime = datetime.datetime.strptime(scan["ctdclock"],'%H:%M:%S')
@@ -1225,7 +1414,34 @@ class ConvertClass ():
         scan["Dstr"]= str('{:5}'.format(self.dens0((int(line[8])/1000.0),(int(line[2])/1000.0)-1000.0)))
         scan["OK"] = True
         scan["Et"] = 0.0
-        return (scan)        
+        return (scan)
+
+    def convert_SBE19p_raw(self, line):
+            scan = dict()
+#            scan["ctdclock"] = line[0]
+#            xdatetime = datetime.datetime.strptime(scan["ctdclock"], '%H:%M:%S')
+            #       if basetime == 0 :
+            #                 basetime = xdatetime
+
+            scan["pres"] = -1. * (float(line[2]))
+            scan["Pstr"] = str('{:7.5}'.format(float(line[2])))
+            scan["Tstr"] = str('{:7.5}'.format(float(line[0])))
+            scan["Cstr"] = str('{:7.5}'.format(float(line[1])))
+            # for flow if < 56.5  value should be 0.. need to add
+            scan["F1str"] = ""
+            scan["F2str"] = ""
+            scan["Lstr"] = ""
+#            scan["Vstr"] = str('{:7.5}'.format(float(line[5])))
+#
+            scan["Sstr"] = str('{:7.5}'.format(float(line[3])))
+#            scan["Dstr"] = str('{:7.5}'.format(float (line[4])))
+            scan["Vstr"] = ""
+
+            scan["Dstr"] = ""
+
+            scan["OK"] = True
+            scan["Et"] = 0.0
+            return (scan)
 
     def convert_archived(self,line):
         scan = dict()
