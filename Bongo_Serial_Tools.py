@@ -539,8 +539,8 @@ class ConvertClass():
         #       if basetime == 0 :
         #                 basetime = xdatetime
         try:
-            scan["pres"] = -1. * (float(line[2])*100.)
-            scan["Pstr"] = str('{:7.4}'.format(float(line[2])*100.))
+            scan["pres"] = -1. * (float(line[2]))
+            scan["Pstr"] = str('{:7.4}'.format(float(line[2])))
             scan["Tstr"] = str('{:7.4}'.format(float(line[0])))
             scan["Cstr"] = str('{:7.4}'.format(float(line[1])))
         # for flow if < 56.5  value should be 0.. need to add
