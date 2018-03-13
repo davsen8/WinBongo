@@ -19,6 +19,7 @@ import random
 import sys
 import wx
 import Queue
+import json
 
 import time
 import serial
@@ -45,8 +46,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 # import pylab
 
-import wxSerialConfigDialog_NAFC as wxSerialConfigDialog
-import wxTerminal_NAFC
+import wxSerialConfigDialog
+#import wxTerminal_NAFC
 
 from  Bongo_Serial_Tools import *
 #import wxTerminal_NAFC
@@ -159,6 +160,14 @@ class GraphFrame(wx.Frame):
         self.SetBackgroundColour('lightgray')   # affects the space arround buttons etc but not graph
 
         self.ser = serial.Serial()  # Create a serial com port access instance
+
+        # get the last basename, and serial port parameters
+        # if there is no pre-existing file ScanMar.CFG a new one is name with default starting basename
+        # for the mission and the serial configuration dialogue is displayed to get setup
+        if not self.read_cfg(self.ser):
+            self.set_default_com_cfg(self.ser)
+            self.on_ser_config(-1)
+
 
         self.BQueue = Queue.Queue()
 
@@ -721,15 +730,7 @@ class GraphFrame(wx.Frame):
             self.canvas.print_figure(path, dpi=self.dpi)
             self.flash_status_message("Saved to %s" % path)
             
-# Configure serial port, requires our serial instance, make sure port is closed before calling
-    def on_ser_config(self,event):
-        self.ser.close()
-        dialog_serial_cfg = wxSerialConfigDialog.SerialConfigDialog(None, -1, "",
-                show=wxSerialConfigDialog.SHOW_BAUDRATE|wxSerialConfigDialog.SHOW_FORMAT|wxSerialConfigDialog.SHOW_FLOW,
-                serial=self.ser
-            )
-        result = dialog_serial_cfg.ShowModal()
-        dialog_serial_cfg.Destroy()
+#
 
 # pop up the wxterminal for interaction with ctd - THIS IS NOT WORKING YET NEEDS WORK
     def on_term(self,event):
@@ -912,6 +913,67 @@ class GraphFrame(wx.Frame):
 
 
 #******************* assorted  methods ****************************************************
+
+    def read_cfg(self, ser):
+        try:
+            with open('ScanMar.CFG', 'r') as fp:
+#                self.basename = fp.readline().rstrip()
+#                self.make_SYTS(self.basename)
+                self.comPort = fp.readline().rstrip()
+                ser.port = self.comPort
+                commsettings = json.load(fp)
+            try:
+                ser.apply_settings(commsettings)
+            except:
+                ser.applySettingsDict(commsettings)  # pyserial pre v 3.0
+
+            fp.close()
+        except:
+            return (False)
+
+        return (True)
+        #            self.set_default_com_cfg()
+
+    def save_cfg(self, ser):
+        try:
+            comsettings = ser.get_settings()
+        except:
+            comsettings = ser.getSettingsDict()  # pyserial pre v 30.0
+
+        with open('ScanMar.CFG', 'w') as fp:
+#            fp.write(self.basename)
+#            fp.write('\n')
+            fp.write(ser.port)
+            fp.write('\n')
+            fp.write(json.dumps(comsettings))
+        fp.close()
+
+        # Configure serial port, requires our serial instance, make sure port is closed before calling
+
+    def on_ser_config(self, event):
+        dialog_serial_cfg = wxSerialConfigDialog.SerialConfigDialog(None, -1, "",
+                                                                    show=wxSerialConfigDialog.SHOW_BAUDRATE | wxSerialConfigDialog.SHOW_FORMAT | wxSerialConfigDialog.SHOW_FLOW,
+                                                                    serial=self.ser
+                                                                    )
+        result = dialog_serial_cfg.ShowModal()
+        dialog_serial_cfg.Destroy()
+        self.save_cfg(self.ser)
+
+
+    def set_default_com_cfg(self,ser):  # Defaults as specified
+        DEFAULT_COM = "COM3"
+        DEFAULT_BAUD = 4800
+
+        ser.port = DEFAULT_COM
+        ser.baudrate = DEFAULT_BAUD
+        ser.bytesize = serial.EIGHTBITS  # number of bits per bytes
+        ser.parity = serial.PARITY_NONE  # set parity check: no parity
+        ser.stopbits = serial.STOPBITS_ONE  # number of stop bits
+        ser.timeout = 5  # timeout block read
+        ser.xonxoff = True  # disable software flow control
+        ser.rtscts = False  # disable hardware (RTS/CTS) flow control
+        ser.dsrdtr = False  # disable hardware (DSR/DTR) flow control
+        ser.writeTimeout = 2  # timeout for write
 
     def WriteHeader (self,fp) :
 #        print "In WRite "+self.hd1["SHIP"]

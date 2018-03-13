@@ -8,8 +8,8 @@ import numpy as np
 import threading
 import Queue
 
-DEFAULT_COM = "COM1"
-DEFAULT_BAUD = 1200
+#DEFAULT_COM = "COM1"
+#DEFAULT_BAUD = 1200
 DEFAULT_RATE = 1   # scans per second
 
 SIMULATOR = False
@@ -89,8 +89,8 @@ class SerialSource_STD12():
         self.scan = dict()
 
     def set_default (self):
-        self.ser.port = DEFAULT_COM
-        self.ser.baudrate = DEFAULT_BAUD
+#        self.ser.port = DEFAULT_COM
+#        self.ser.baudrate = DEFAULT_BAUD
         self.ser.bytesize = serial.EIGHTBITS  # number of bits per bytes
         self.ser.parity = serial.PARITY_NONE  # set parity check: no parity
         self.ser.stopbits = serial.STOPBITS_ONE  # number of stop bits
@@ -198,8 +198,8 @@ class SerialSource_SBE19p(threading.Thread):
         threading.Thread.__init__(self)
 
     def set_default(self):
-        self.ser.port = DEFAULT_COM
-        self.ser.baudrate = DEFAULT_BAUD
+#        self.ser.port = DEFAULT_COM
+#        self.ser.baudrate = DEFAULT_BAUD
         self.ser.bytesize = serial.EIGHTBITS  # number of bits per bytes
         self.ser.parity = serial.PARITY_NONE  # set parity check: no parity
         self.ser.stopbits = serial.STOPBITS_ONE  # number of stop bits
