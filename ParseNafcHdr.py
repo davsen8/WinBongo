@@ -307,19 +307,21 @@ def Read_NAFC_File_Hdr(f,cards):
         return(True)
 
 # write header card strings to target file
-def Write_NAFC_File_Hdr(f,z,HdrDicts):
+def Write_NAFC_File_Hdr(outfilename,z,HdrDicts):
         hdr1_out=Hdr1_Dict_to_String(HdrDicts["hdr1"])
         hdr4_out=Hdr4_Dict_to_String(HdrDicts["hdr4"])
         hdr8_out=Hdr8_Dict_to_String(HdrDicts["hdr8"])
 #        f.write(z)
-        f.write("NAFC_Y2K_HEADER\n")
-        f.write(hdr1_out)
-        f.write('\n')
-        f.write(hdr4_out)
+        with open(outfilename,'w') as f:
+            f.write("NAFC_Y2K_HEADER\n")
+            f.write(hdr1_out)
+            f.write('\n')
+            f.write(hdr4_out)
 #        f.write(cards["h4"])
-        f.write('\n')
-        f.write(hdr8_out)
-        f.write('\n')
+            f.write('\n')
+            f.write(hdr8_out)
+            f.write('\n')
+
         print ("File updated")
         return True
 def save_file_dialog(filename):
