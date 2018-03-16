@@ -320,6 +320,7 @@ def Write_NAFC_File_Hdr(f,z,HdrDicts):
         f.write('\n')
         f.write(hdr8_out)
         f.write('\n')
+        print ("File updated")
         return True
 def save_file_dialog(filename):
 
@@ -362,7 +363,7 @@ def EDF_to_NAFC(filename,HdrDict):
                try:
                   fout=open(fileout,"w")         
                except IOError:
-                print "bad filename or path.. by"
+                print ( "bad filename or path.. by")
                 msg="Bad name or path "+fileout+" edit or Cancel"
                 FileOK=False
 
@@ -406,9 +407,9 @@ def FileTypeIs(filename):
     if firstline[0:7] == "// MK21":
         return ("MK21_EDF")
     if firstline[0:4] == "NAFC":
-        return ("NAFC_Y2K_HEADER");
+        return ("NAFC_Y2K_HEADER")
     else:
-        return ("UNKNOWN");    
+        return ("UNKNOWN")
 
 ######################################
 #  This code needs to go into the main of the program startup module

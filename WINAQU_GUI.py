@@ -238,8 +238,10 @@ def main ():
 #start the applications
   app.MainLoop()
 
-#after edit is done  
+#after edit is done
+
   if DataChanged:
+        print("saving file", outfilename)
         f=open(outfilename,"r+")
         oK= ParseNafcHdr.Write_NAFC_File_Hdr(f,cards["h0"],HdrDicts)
         f.close()

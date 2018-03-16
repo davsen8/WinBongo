@@ -48,6 +48,7 @@ import numpy as np
 
 import wxSerialConfigDialog
 #import wxTerminal_NAFC
+import WINAQU_GUI
 
 from  Bongo_Serial_Tools import *
 #import wxTerminal_NAFC
@@ -891,7 +892,7 @@ class GraphFrame(wx.Frame):
     def on_edit_head(self,event):
         if self.RT_source == True:
             self.on_stop_rt (1)
-#        WINAQU_GUI_BONGO.main()
+        WINAQU_GUI.main()
 
     def on_set_base_header(self,event):
         xx = ShipTrip_Dialog(self,self.hd1["SHIP"],self.hd1["TRIP"],self.hd1["STN"])
