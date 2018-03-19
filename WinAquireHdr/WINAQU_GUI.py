@@ -3,16 +3,15 @@ import wx
 import os,sys
  
 #import the created GUI file and Parser
-import AquireGUI4
-import ParseNafcHdr
+from WinAquireHdr import AquireGUI4, ParseNafcHdr
 
- 
+
 #inherit from the MainFrame created in wxFowmBuilder and create CalcFrame
 class EditHdr(AquireGUI4.HDR_DIALOG):
     #constructor
     def __init__(self,parent,filename,Hdr1dict,Hdr8dict):
         #initialize parent class        
-        AquireGUI4.HDR_DIALOG.__init__(self,parent)
+        AquireGUI4.HDR_DIALOG.__init__(self, parent)
         
         self.afileNpath=filename 
         self.Hdr1=Hdr1dict
@@ -213,14 +212,14 @@ def main ():
    
   if  afiletype == "NAFC_Y2K_HEADER":
       f=open(infilename,"r+")
-      if ParseNafcHdr.Read_NAFC_File_Hdr(f,cards):
-         ParseNafcHdr.Parse_NAFC_Hdr1(cards,HdrDicts["hdr1"])
-         ParseNafcHdr.Parse_NAFC_Hdr4(cards,HdrDicts["hdr4"])
-         ParseNafcHdr.Parse_NAFC_Hdr8(cards,HdrDicts["hdr8"])
+      if ParseNafcHdr.Read_NAFC_File_Hdr(f, cards):
+         ParseNafcHdr.Parse_NAFC_Hdr1(cards, HdrDicts["hdr1"])
+         ParseNafcHdr.Parse_NAFC_Hdr4(cards, HdrDicts["hdr4"])
+         ParseNafcHdr.Parse_NAFC_Hdr8(cards, HdrDicts["hdr8"])
          f.close()
          outfilename=infilename
   elif afiletype == "MK21_EDF" :
-        outfilename = ParseNafcHdr.EDF_to_NAFC(infilename,HdrDicts)
+        outfilename = ParseNafcHdr.EDF_to_NAFC(infilename, HdrDicts)
         if outfilename==".":
             print ("Outfile abort =",outfilename)
 #            wx.Exit()
@@ -242,9 +241,11 @@ def main ():
 
   if DataChanged:
         print("saving file", outfilename)
-        f=open(outfilename,"r+")
-        oK= ParseNafcHdr.Write_NAFC_File_Hdr(f,cards["h0"],HdrDicts)
-        f.close()
+#        f=open(outfilename,"r+")
+        oK= ParseNafcHdr.Write_NAFC_File_Hdr(outfilename, cards["h0"], HdrDicts)
+#        f.flush()
+#        os.fsync(f.fileno())
+#        f.close()
 ###################### Program entry point ###############################
 if __name__ == '__main__':
     main()

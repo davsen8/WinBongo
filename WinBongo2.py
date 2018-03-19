@@ -14,19 +14,12 @@ Also
  Code Borrowed from seawater-3.3.2-py.27.egg for the density calcuations
 """
 import os
-import pprint
-import random
 import sys
 import wx
 import Queue
 import json
 
-import time
 import serial
-import datetime
-
-
-
 
 #import WINAQU_GUI_BONGO
 
@@ -37,18 +30,14 @@ import matplotlib
 matplotlib.use('WXAgg')
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_wxagg import \
-    FigureCanvasWxAgg as FigCanvas, \
-    NavigationToolbar2WxAgg as NavigationToolbar
+    FigureCanvasWxAgg as FigCanvas
 #from mpl_toolkits.axes_grid.parasite_axes import HostAxes, ParasiteAxes   DEPRECIATED
 from mpl_toolkits.axes_grid1.parasite_axes import HostAxes, ParasiteAxes
-#from mpl_toolkits.axes_grid.parasite_axes import SubplotHost, ParasiteAxes
-import matplotlib.pyplot as plt
-import numpy as np
-# import pylab
+
 
 import wxSerialConfigDialog
 #import wxTerminal_NAFC
-import WINAQU_GUI
+# from WinAquireHdr import WINAQU_GUI
 
 from  Bongo_Serial_Tools import *
 #import wxTerminal_NAFC
@@ -58,9 +47,11 @@ ID_STOP_RT = wx.NewId()
 ID_START_ARC = wx.NewId()
 ID_STOP_ARC = wx.NewId()
 ID_SER_CONF = wx.NewId()
+ID_INIT = wx.NewId()
+ID_STATUS = wx.NewId()
 
 VERSION = "V2.0 March 2018"
-TITLE = "WinBongo"
+TITLE = "WinBongo2"
 
 CTD="SBE"
 SIMULATOR = False
@@ -169,15 +160,10 @@ class GraphFrame(wx.Frame):
             self.set_default_com_cfg(self.ser)
             self.on_ser_config(-1)
 
-
         self.BQueue = Queue.Queue()
 
         CTD = "SBE"
 
-        print ("HELLO")
-
-
-        
         self.SRate = SmoothRate(5)  # Create a rate smoother instance
 
         self.port_open = False
@@ -218,10 +204,10 @@ class GraphFrame(wx.Frame):
 
 # the redraw timer is used to add new data to the plot and update any changes via
 # the on_redraw_timer method
-#10 ms; if you call at slower rate (say 100ms)the manual scale box entries don't respond well
+#10 ms; if you call at slower rate say 100 ms things may not respnd as quick, but there
         self.redraw_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.on_redraw_timer, self.redraw_timer)        
-        self.redraw_timer.Start(10)
+        self.redraw_timer.Start(100)
 
 #**************************** End of GraphFrame Init **********************
 #*** GraphFrame Methods ***************************************************
@@ -236,11 +222,14 @@ class GraphFrame(wx.Frame):
         m_ser_config = menu_file.Append(ID_SER_CONF, "Serial Config", "Serial Config")
         self.Bind(wx.EVT_MENU, self.on_ser_config, m_ser_config)
         menu_file.AppendSeparator()
-        m_term = menu_file.Append(-1, "Launch Terminal", "Terminal")
-        self.Bind(wx.EVT_MENU, self.on_term, m_term)
-        menu_file.AppendSeparator()
+#        m_term = menu_file.Append(-1, "Launch Terminal", "Terminal")
+#        self.Bind(wx.EVT_MENU, self.on_term, m_term)
+#        menu_file.AppendSeparator()
         m_exit = menu_file.Append(-1, "E&xit\tCtrl-X", "Exit")
         self.Bind(wx.EVT_MENU, self.on_exit, m_exit)
+
+        # responds to exit symbol x on frame title bar
+        self.Bind(wx.EVT_CLOSE, self.on_exit)
 
         menu_realtime = wx.Menu()
         m_rtstart = menu_realtime.Append(ID_START_RT, "Start", "Start realtime data")
@@ -248,6 +237,13 @@ class GraphFrame(wx.Frame):
         menu_realtime.AppendSeparator()
         m_rtstop = menu_realtime.Append(ID_STOP_RT, "End", "End realtime data")
         self.Bind(wx.EVT_MENU, self.on_stop_rt, m_rtstop)
+        menu_realtime.AppendSeparator()
+        self.m_initlogger = menu_realtime.Append(ID_INIT, "Initial Logger", "Clear ctd Memmory")
+        self.Bind(wx.EVT_MENU, self.on_init_logger, self.m_initlogger)
+        menu_realtime.AppendSeparator()
+        self.m_getctdstatus = menu_realtime.Append(ID_STATUS, "Get CTD status", "CTD Status (DS)")
+        self.Bind(wx.EVT_MENU, self.on_get_ctd_status, self.m_getctdstatus)
+
 
         menu_archived = wx.Menu()
         m_arcstart = menu_archived.Append(ID_START_ARC, "Start", "Start archived data")
@@ -260,11 +256,11 @@ class GraphFrame(wx.Frame):
         m_basehead = menu_option.Append(-1, "Set ship trip stn", "shiptripstn")
         self.Bind(wx.EVT_MENU, self.on_set_base_header, m_basehead)
         menu_option.AppendSeparator()
-        m_edithead = menu_option.Append(-1, "Edit File Header", "Edit File Header")
-        self.Bind(wx.EVT_MENU, self.on_edit_head, m_edithead)
+#        m_edithead = menu_option.Append(-1, "Edit File Header", "Edit File Header")
+#        self.Bind(wx.EVT_MENU, self.on_edit_head, m_edithead)
+#        menu_option.AppendSeparator()
         menu_option.AppendSeparator()
-        menu_option.AppendSeparator()
-        self.cb_grid = menu_option.Append (-1,"Ghow Grid","Grid",kind=wx.ITEM_CHECK)
+        self.cb_grid = menu_option.Append (-1,"Show Grid","Grid",kind=wx.ITEM_CHECK)
         self.Bind(wx.EVT_MENU, self.on_cb_grid, self.cb_grid)
 #        m_grid.SetValue(True) need syntax ??
 
@@ -285,8 +281,13 @@ class GraphFrame(wx.Frame):
         self.cb_grid.Check(True)
         m_rtstop.Enable(False)
         m_arcstop.Enable(False)
-        m_term.Enable (False)  # leave off for now
+        self.m_initlogger.Enable(False)
+        self.m_getctdstatus.Enable(False)
+#        m_edithead(False)
+#        m_term.Enable (False)  # leave off for now
         m_basehead.Enable(False)
+
+        self.menubar.EnableTop(2, False)  # lock out arc playback while rt running
 
 # ***********************************************************************************
     def create_main_panel(self):
@@ -519,7 +520,7 @@ class GraphFrame(wx.Frame):
 # neg 60 is to handle depth negative
         SlopeTime1 = (ymin/self.Dslope)*-60.0/DEFAULT_RATE
         SlopeTime2 = SlopeTime1+(ymin/self.Uslope)*-60.0/DEFAULT_RATE
-#        print SlopeTime1, SlopeTime2
+
         self.SlopeLineX = np.array([0.0,SlopeTime1,SlopeTime2])
         self.SlopeLineY = np.array([0.0,ymin,0.0])
 
@@ -734,18 +735,18 @@ class GraphFrame(wx.Frame):
 #
 
 # pop up the wxterminal for interaction with ctd - THIS IS NOT WORKING YET NEEDS WORK
-    def on_term(self,event):
+#    def on_term(self,event):
 
         self.ser.close()
 #        wxTerminal.MyApp()
 #        print "opening wx"
 #        frame_terminal=wxTerminal.MyApp(0)
-        frame_terminal=wxTerminal_NAFC.TerminalFrame(self, -1, "")
+#        frame_terminal=wxTerminal_NAFC.TerminalFrame(self, -1, "")
 #        print "Show modal"
 #        self.SetTopWindow(frame_terminal)
-        frame_terminal.Show()
+#        frame_terminal.Show()
 #        print "Destroying"
-        frame_terminal.Destroy()
+#        frame_terminal.Destroy()
 
 # Realtime -> start  opens serial port and log file for realtime data
         
@@ -764,9 +765,7 @@ class GraphFrame(wx.Frame):
 
         if self.DataSource == None:
 
-            if (CTD == "STD"):
-                self.DataSource = SerialSource_STD12(self, self.ser)
-            elif (CTD == "SBE"):
+            if (CTD == "SBE"):
                 self.DataSource = SerialSource_SBE19p(self.ser,self.BQueue)
                 self.DataSource.start()
 
@@ -784,10 +783,8 @@ class GraphFrame(wx.Frame):
         self.flash_status_message("Waking CTD")
         self.DataSource.Send_Wake()
 
-        self.flash_status_message("Getting CTD Status message")
-        status = self.DataSource.Get_CTD_Status()
-        print (status)
-        self.message_box(status)
+
+        self.on_get_ctd_status(-1)
 
         self.flash_status_message("SETTING CTD TO REAL TIME MODE")
         self.DataSource.send_Real()
@@ -810,6 +807,9 @@ class GraphFrame(wx.Frame):
         menubar.Enable(ID_STOP_RT,not enabled)
         menubar.Enable(ID_SER_CONF, False)
         menubar.EnableTop(2, False)  # lock out arc playback while rt running
+        self.m_initlogger.Enable(True)
+        self.m_getctdstatus.Enable(True)
+
         self.monitor_button.Enable(True)
         self.GraphRun_button.Enable(True)
         self.data["Pres"]=[0]
@@ -846,7 +846,7 @@ class GraphFrame(wx.Frame):
         menubar.Enable(ID_STOP_RT,not enabled)
         menubar.Enable(ID_SER_CONF, True)
 
-        menubar.EnableTop(2, True)  # re-enable archieved data option
+#        menubar.EnableTop(2, True)  # re-enable archieved data option
         self.monitor_button.Enable(False)
         self.GraphRun_button.Enable(False)
 
@@ -866,7 +866,7 @@ class GraphFrame(wx.Frame):
             menubar.EnableTop(1, False)  # lock out RT playback while Archieved running
             self.monitor_button.Enable(True)
             self.GraphRun_button.Enable(True)            
-            self.datagen = DataGen2(FileName) #Create a data source instance
+#            self.datagen = DataGen2(FileName) #Create a data source instance
 #            self.fig.clf()
             self.data["Pres"]=[0]
             self.data["Temp"]=[0]
@@ -889,14 +889,14 @@ class GraphFrame(wx.Frame):
         self.GraphRun_button.Enable(False)
         menubar.EnableTop(1, True)  # re-enable realtime data option
 
-    def on_edit_head(self,event):
-        if self.RT_source == True:
-            self.on_stop_rt (1)
-        WINAQU_GUI.main()
+#    def on_edit_head(self,event):
+#        if self.RT_source == True:
+#            self.on_stop_rt (1)
+#        WINAQU_GUI.main()
 
     def on_set_base_header(self,event):
         xx = ShipTrip_Dialog(self,self.hd1["SHIP"],self.hd1["TRIP"],self.hd1["STN"])
-        print ("before "+self.hd1["SHIP"]+" "+ self.hship)
+
 
         xx.SetBase(self.hship,self.hd1["TRIP"],self.hd1["STN"])
         res=xx.ShowModal()
@@ -907,7 +907,7 @@ class GraphFrame(wx.Frame):
             self.hship = xx.GetShip()
             self.hd1["TRIP"] = xx.GetTrip()
             self.hd1["STN"] = xx.GetStn()
-            print ("AFTER="+self.hd1["SHIP"]+" "+ self.hship)
+
             self.hship="LL"
 
             xx.Destroy()
@@ -917,7 +917,7 @@ class GraphFrame(wx.Frame):
 
     def read_cfg(self, ser):
         try:
-            with open('ScanMar.CFG', 'r') as fp:
+            with open('Bongo.CFG', 'r') as fp:
 #                self.basename = fp.readline().rstrip()
 #                self.make_SYTS(self.basename)
                 self.comPort = fp.readline().rstrip()
@@ -941,7 +941,7 @@ class GraphFrame(wx.Frame):
         except:
             comsettings = ser.getSettingsDict()  # pyserial pre v 30.0
 
-        with open('ScanMar.CFG', 'w') as fp:
+        with open('Bongo.CFG', 'w') as fp:
 #            fp.write(self.basename)
 #            fp.write('\n')
             fp.write(ser.port)
@@ -977,19 +977,29 @@ class GraphFrame(wx.Frame):
         ser.writeTimeout = 2  # timeout for write
 
     def WriteHeader (self,fp) :
-#        print "In WRite "+self.hd1["SHIP"]
 
         xtime = '{:>5.5}'.format(str(datetime.datetime.now().time()))
         xdate = '{:>12.12}'.format(str(datetime.datetime.now().date()))
+        CTDID='S4018'
         hdr1_out= self.hd1["SHIP"].strip().zfill(2)+ self.hd1["TRIP"].strip().zfill(3)+ self.hd1["STN"].strip().zfill(3)
         fp.write("NAFC_Y2K_HEADER\n")
-        fp.write (hdr1_out+"                    "+xdate+" "+xtime+"      STD12     O                1\n")
-        fp.write (hdr1_out+" 000000 01.00 A 12 #ZEPTCSMWwLV--------              000 0000 0000 000 4\n")
+        fp.write (hdr1_out+"                    "+xdate+" "+xtime+"      "+CTDID+"     O                1\n")
+        fp.write (hdr1_out+" 000000 01.00 A 12 #ZEPTCSM------------              000 0000 0000 000 4\n")
         fp.write (hdr1_out+"                                                                       8\n")
-        fp.write ("SCAN CtdClk   ET   DEPTH    TEMP  COND   SAL   SIGMAT   FLOW1   FLOW2  LIGHT   VOLTS\n")
+        fp.write ("SCAN CtdClk   ET   PRES    TEMP  COND   SAL   SIGMAT \n")
         fp.write ("-- DATA --\n")
 
+    def on_init_logger(self,event):
+        self.flash_status_message("Initiizing CTD - Deleting internal Stored casts")
+        if self.ser.isOpen():
+            if self.DataSource != None:
+                self.DataSource.send_InitLogging()
 
+    def on_get_ctd_status(self,event):
+        self.flash_status_message("Getting CTD Status message")
+        status = self.DataSource.Get_CTD_Status()
+            #        print (status)
+        self.message_box(status)
     
     def on_exit(self, event):
         if self.runlogfile != None:
@@ -1139,10 +1149,7 @@ class EntryPanel (wx.Panel):
     def GetBase(self):
             return self.ship.GetValue(),self._trip.GetValue(),self._stn.GetValue()
 
-
-        
     def GetShip(self):
-                print ("IN MODEL="+self.ship.GetValue())
                 return self.ship.GetValue()
     def GetTrip(self):
                 return self._trip.GetValue()

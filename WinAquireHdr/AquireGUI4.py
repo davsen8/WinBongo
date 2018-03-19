@@ -9,7 +9,7 @@
 
 import wx
 import wx.xrc
-from AquireGUI_Validate import IntRangeValidator
+from WinAquireHdr.AquireGUI_Validate import IntRangeValidator
 ###########################################################################
 ## Class HDR_DIALOG
 ###########################################################################

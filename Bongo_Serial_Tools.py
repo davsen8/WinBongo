@@ -1,5 +1,4 @@
 
-
 import time
 import serial
 import datetime
@@ -13,52 +12,6 @@ import Queue
 DEFAULT_RATE = 1   # scans per second
 
 SIMULATOR = False
-
-###########################################################################
-# READS DATA FROM A FILE :PASS 1 LINE at a atime back via the next method
-
-class DataGen2(object):
-    def __init__(self, FileName ,init=50):
-        self.data = self.init = init
-        self.Convert =ConvertClass()
-        #        self.temp = 0.0
-        self.FileName = FileName
-        self.f = open(self.FileName ,"r")
-        self.scannum =0
-        self.scan = dict()
-
-        self.readheader()
-
-    def next(self):
-        text =self.f.readline()
-
-        if text =="" :
-            self.scan["OK"] = False
-            return(self.scan)
-        else :
-            self.scannum+=1
-            line = text.split()
-            scan = self.Convert.convert_simulation_b95(line)
-            #            scan = self.Convert.convert_archived(line)
-            scan["Et" ] =str(self.scannum * DEFAULT_RATE)
-
-            return (scan)
-
-    def readheader(self):
-
-        text =self.f.readline()
-        text =self.f.readline()
-        text =self.f.readline()
-        text =self.f.readline()
-        text =self.f.readline()
-        text =self.f.readline()
-
-
-    def flush(self):  # dummy
-        return()
-
-    def close_infile(self):
-        self.f.close()
 
 ########################################################################################
 #  SERIAL PORT STD READER CLASS
@@ -78,105 +31,8 @@ class DataGen2(object):
 # ser.timeout = None          #blocking read when using radline
 # ser.timeout = 0             #non-block read
 ########################################################################################
-class SerialSource_STD12():
-
-    def __init__(self ,parent ,serial):
-        self.parent = parent                # needed to call the flash status bar method of Graphframe
-        self.ser = serial
-        self.StartTime = 0
-        self.set_default()
-        self.Convert =ConvertClass()
-        self.scan = dict()
-
-    def set_default (self):
-#        self.ser.port = DEFAULT_COM
-#        self.ser.baudrate = DEFAULT_BAUD
-        self.ser.bytesize = serial.EIGHTBITS  # number of bits per bytes
-        self.ser.parity = serial.PARITY_NONE  # set parity check: no parity
-        self.ser.stopbits = serial.STOPBITS_ONE  # number of stop bits
-        self.ser.timeout = 5  # timeout block read
-        self.ser.xonxoff = True  # disable software flow control
-        self.ser.rtscts = False  # disable hardware (RTS/CTS) flow control
-        self.ser.dsrdtr = False  # disable hardware (DSR/DTR) flow control
-        self.ser.writeTimeout = 2  # timeout for write
-
-    def open_Port(self):
-        try:
-            self.ser.open()
-        except Exception as e:
-            #          print "error open serial port: "+self.ser.port+" " + str(e)
-            return(False)
-        self.parent.flash_status_message("PORT OPEN  " +self.ser.getPort())
-
-        return (True)
-
-    def flush (self):
-        self.ser.flushInput()
-        line = self.ser.readline()  # ensure a full line is in buffer by discarding any stub
-
-    def next(self):
-
-        if self.StartTime == 0:
-            self.StartTime = time.time()
-
-        text = self.ser.readline()
-        if text == "":              # this is due to Cr-Lf show as 2 lines which requires the (LF)to be flushed
-            text = self.ser.readline()
-
-        if text =="" :
-            self.scan["OK"] = False
-            return(self.scan)
-        else :
-            line = text.split()
-            if SIMULATOR :
-                scan = self.Convert.convert_simulation_b95(line)
-                #             scan = self.Convert.convert_archived(line)
-                scan["Et" ]= str(time.time() - self.StartTime)
-            else:
-                scan = self.Convert.convert_STD12_raw(line)
-
-        return (scan)
-
-    def send_wake(self):
-        self.parent.flash_status_message("WAKING STD")
-        self.ser.write("\r\r\r")
-        print("WAKE= " + self.ser.readline())
-
-    def send_Real(self):
-
-        self.send_wake()
-        self.parent.flash_status_message("SENDING REAL")
-        self.ser.write("REAL\r")
-        self.ser.readline()     # echo plus Cr-Lf which requires the 2nd read
-        self.ser.readline()
-        time.sleep(1.0)
-
-    def send_Start_Data(self):
-        self.send_wake()
-        self.ser.write("M\r")
-        time.sleep(2.0)
-        self.flush()
-        self.parent.flash_status_message("STD DATA STARTED")
-
-    def send_Stop_Data(self) :
-        self.ser.write ("\r")
-        self.flush()
-        self.parent.flash_status_message("STD DATA STOPPED")
-
-    def send_Set_DataRate(self ,rate):
-        self.parent.flash_status_message("SETTING STD DATA RATE =  "+ rate +" SCANS PER SECOND")
-        self.ser.write("SET S  " +rate +"\r")
-        self.ser.readline()
-
-    def close_Port(self):
-        self.parent.flash_status_message("PORT CLOSSING")
-        self.ser.close()
-
-    def is_port_open(self):
-        return (self.ser.isOpen())
 
 
-# *** END OF SerialSource_STD12 Class ******************
 # *******************************************  SBE19PLUS *********************************************
 class SerialSource_SBE19p(threading.Thread):
 
@@ -245,10 +101,10 @@ class SerialSource_SBE19p(threading.Thread):
                 line = self.next()
 
                 if line != '' and not self.pause:  # if we are in a pause just waste the record, but keep reading
-                    print(line)
+#                    print(line)
                     line = line.split(',')
                     scan = self.Convert.convert_SBE19p_raw(line)
-                    print (scan)
+#                    print (scan)
                     if "OK" in scan:
                         self.queue.put(scan)
                     retrys = 0
@@ -280,7 +136,7 @@ class SerialSource_SBE19p(threading.Thread):
 
                 # write data
                 self.ser.write("\r")
-                print("write data: CR CR CR")
+#                print("write data: CR CR CR")
                 response = ""
                 status = ""
                 trys = 0
@@ -293,11 +149,11 @@ class SerialSource_SBE19p(threading.Thread):
                     while (self.ser.inWaiting() >= 2) and (sleeps < MAX_TRYS):
                         time.sleep(0.05)
                         sleeps += 1
-                        print("sleeps=" + str(sleeps))
+#                        print("sleeps=" + str(sleeps))
 #                    if (sleeps < MAX_TRYS):
                         ammount = self.ser.inWaiting()
                         response = response + self.ser.read(ammount)
-                        print ("trys=" + str(ammount) + str(trys)+ ' ' + response)
+#                        print ("trys=" + str(ammount) + str(trys)+ ' ' + response)
                     sleeps = 0
 
                     trys += 1
@@ -306,19 +162,19 @@ class SerialSource_SBE19p(threading.Thread):
                 self.ser.flushInput()  # flush input buffer, discarding all its contents clear any Seacat
 
                 if (trys > MAX_TRYS):
-                    status = "FAIL: CAN NOT AWAKEN AFTER " + str(trys) + " TRYS : CHECK PORT,CABLES & SWITCHES"
+                    status = False
                 else:
-                    status = "PASS: CTD AWAKE"
+                    status = True
 
-                print("awake " + status + response + " " + str(trys))
+#                print("awake " + status + response + " " + str(trys))
 
             except Exception as e1:
-                print ("error communicating...: " + str(e1))
-                status = "FAIL: Error COMMUNICATING ON WAKEUP: CHECK SERIAL PORT#/ADAPTER " + self.ser.port
+#                print ("error communicating...: " + str(e1))
+                status = False
 
         else:
-            print ("cannot open serial port " + self.ser.port)
-            status = "FAIL: PORT NOT OPEN: CHECK SERIAL PORT#/ADAPTER" + self.ser.port
+#            print ("cannot open serial port " + self.ser.port)
+            status = False
         return status
 
 
@@ -335,31 +191,35 @@ class SerialSource_SBE19p(threading.Thread):
     def Send_Command(self,command):
         responce = ''
         try:
-            print("port open")
+                                    # when ctd fals asleep it write  'time out'  so need to
             self.ser.flushInput()  # flush input buffer, discarding all its contents
             self.ser.flushOutput()  # flush output buffer, aborting current output
 
+            if self.Send_Wake():
+
             # ensure command has a carriage return , add if needed
-            if (command.find('\r'))== -1:
-                command = command +'\r'
+                if (command.find('\r'))== -1:
+                    command = command +'\r'
 
-            command_size = len(command)
-            print("sending command " + command + " " + str(command_size))
-            self.ser.write(command)
-            while (self.ser.inWaiting() < command_size):
-                time.sleep(0.01)
+                command_size = len(command)
+#            print("sending command " + command + " " + str(command_size))
+                self.ser.write(command)
+                while (self.ser.inWaiting() < command_size):
+                    time.sleep(0.005)
 
-            response = self.ser.read(command_size)
+                response = self.ser.read(command_size)
 
                 # SBE19p returns ?cmd S>   if command is not recognized
-            if (responce.find('?c')) != -1:
-                self.ser.flushInput()
-                return False
+                if (responce.find('?c')) != -1:
+                    self.ser.flushInput()
+                    return False
+            else:
+                return False   # didnt wake
 
 
-            print("read data: " + response)
+#            print("read data: " + response)
         except Exception as e1:
-            print("error communicating...: " + str(e1))
+#            print("error communicating...: " + str(e1))
             return False
 
         return True
@@ -384,80 +244,56 @@ class SerialSource_SBE19p(threading.Thread):
                 status = status.replace('\r', ' ', 20)
             except Exception as e1:
                 print ("error communicating...: " + str(e1))
-
         else:
-            print ("cannot open serial port ")
+#            print ("cannot open serial port ")
             status = 'ERROR'
 
         return status
 
-    def send_Real(self):
-#        self.parent.flash_status_message("SETTING CTD TO REAL TIME MODE")
-#        self.parent.flash_status_message("SENDING IGNORESWITCH")
-        self.ser.write("IGNORESWITCH=Y\r")
-        print (self.ser.readline())  # echo plus Cr-Lf which requires the 2nd read
-        #        self.ser.readline()
-#        self.parent.flash_status_message("SENDING OUTPUTFORMAT=3")
-        self.ser.write("OUTPUTFORMAT=3\r")
-        print (self.ser.readline())  # echo plus Cr-Lf which requires the 2nd read
-        #        self.ser.readline()
-#        self.parent.flash_status_message("SENDING OUTPUTSAL")
-        self.ser.write("OUTPUTSAL=Y\r")
-        print (self.ser.readline())  # echo plus Cr-Lf which requires the 2nd read
-        #        self.ser.readline()
-        #        self.ser.write("OUTPUTUCSD=Y\r")
-        #        self.ser.readline()  # echo plus Cr-Lf which requires the 2nd read
-        #        self.ser.readline()
+    def send_Real(self):  # place ctd inr ealtime mode under computer control, eng unit data with salinity
+        self.Send_Command("IGNORESWITCH=Y\r")
+        self.Send_Command("OUTPUTFORMAT=3\r")
+        self.Send_Command("OUTPUTSAL=Y\r")
 
-#        time.sleep(1.0)
+
+    def send_Reset_factory(self):  # return ctd to swithc control and hex data
+        self.Send_Command("IGNORESWITCH=N\r")
+        self.Send_Command("OUTPUTFORMAT=0\r")
+
 
     def send_StartNow_Data(self):
-        self.Send_Wake()
-        self.ser.write("STARTNOW\r")
-#        print (self.ser.readline())
-#        time.sleep(0.1)
-        self.ser.flushInput()
-#        self.ser.readline()
+        self.Send_Command("STARTNOW\r")
+
         self.StreamOn = True
-#        self.parent.flash_status_message("CTD DATA STARTED")
+
 
     def send_Stop_Data(self):
-#        self.parent.flash_status_message("STOPPING CTD DATA")
-        self.StreamOn = False
-        self.ser.write("STOP\r")
-        print ("SENDING STOP")
-#        time.sleep(0.01)
-#        print (self.ser.readline())
-        self.flush()
+        self.pause_data_feed()
+        self.StreamOn = False   # should stop thread procesing further data
+        self.ser.write("STOP\r")   # stop doesnt echo so dont use Send_Command
+        self.flush()  #clear the S> prompt and data lines left in buffer
 
+    def send_InitLogging(self):  # put ctd to sleep
 
-    def send_QS(self):  # put ctd to sleep
-        self.ser.write("QS\r")
-
-    def send_Clear_Data(self):
-#        self.parent.flash_status_message("CLEARING CTD MEMORY")
-        self.ser.write("INITLOGGING\r")
-        print (self.ser.readline())
-        time.sleep(0.1)
+        self.Send_Command('INITLOGGING')
         self.ser.flushInput()
+
+    def send_QS(self):  # put ctd to sleep Qs doesnt edcho so dont use Send_Command
+        self.ser.write("QS\r")
 
 
     def send_Set_DataRate(self, rate):
         avg = str(rate *4)
-#        self.parent.flash_status_message("SETTING CTD DATA RATE = " + rate + " SCANS PER SECOND")
-        self.ser.write("NAVG=" + '4' + "\r")
-        self.ser.readline()
+        self.Send_Command("NAVG=" + '4' + "\r") #  avg 4 scans to get 1 per sencond
+
 
     def close_Port(self):
 #        self.parent.flash_status_message("RESETTING CTD TO SELF CONTAINED")
-        self.ser.write("IGNORESWITCH=N\r")
-        self.ser.readline()  # echo plus Cr-Lf which requires the 2nd read
-#        self.ser.readline()
-        self.ser.write("OUTPUTFORMAT=0\r")
-        self.ser.readline()  # echo plus Cr-Lf which requires the 2nd read
-#        self.ser.readline()
+        self.send_Stop_Data()
+        self.Send_Command("IGNORESWITCH=N")
+        self.Send_Command("OUTPUTFORMAT=0")
+        self.send_QS()
 
-#        self.parent.flash_status_message("PORT CLOSSING")
         self.ser.close()
 
     def is_port_open(self):
@@ -468,11 +304,7 @@ class SerialSource_SBE19p(threading.Thread):
 
     def shut_down(self):
         self.pause_data_feed()
-
         self.send_Stop_Data()
-        self.send_QS()
-        self.ser.flushInput()
-#        time.sleep(0.05)   # avoid pulling the rug out to quick
         self.close_Port()
         self.shutdown = True
 
@@ -510,27 +342,6 @@ class ConvertClass():
 
         self.bastime = 0
 
-    def convert_STD12_raw(self, line):
-        scan = dict()
-        scan["ctdclock"] = line[0]
-        xdatetime = datetime.datetime.strptime(scan["ctdclock"], '%H:%M:%S')
-        #       if basetime == 0 :
-        #                 basetime = xdatetime
-
-        scan["pres"] = -1. * (float(line[1]) / 10.0)
-        scan["Pstr"] = str('{:.5}'.format(int(line[1]) / 10.0))
-        scan["Tstr"] = str('{:.5}'.format(int(line[2]) / 1000.0))
-        scan["Cstr"] = str('{:.5}'.format(int(line[3]) / 1000.0 / 42.921))
-        # for flow if < 56.5  value should be 0.. need to add
-        scan["F1str"] = str('{:.5}'.format(int(line[4]) / 100.0))
-        scan["F2str"] = str('{:.5}'.format(int(line[5]) / 100.0))
-        scan["Lstr"] = str('{:.5}'.format(int(line[6]) / 100.0))
-        scan["Vstr"] = str('{:.5}'.format(int(line[7]) / 100.0))
-        scan["Sstr"] = str('{:.5}'.format(int(line[8]) / 1000.0))
-        scan["Dstr"] = str('{:5}'.format(self.dens0((int(line[8]) / 1000.0), (int(line[2]) / 1000.0) - 1000.0)))
-        scan["OK"] = True
-        scan["Et"] = 0.0
-        return (scan)
 
     def convert_SBE19p_raw(self, line):
         scan = dict()
@@ -559,55 +370,6 @@ class ConvertClass():
             scan["Et"] = 0.0
         except: pass
 
-        return (scan)
-
-    def convert_archived(self, line):
-        scan = dict()
-
-        #        xdatetime = datetime.datetime.strptime(ctdclock,'%H:%M:%S')
-        #        if basetime = 0 :
-        #                 basetime = xdatetime
-        #        scan["ctdclock"] = line[0]
-        scan["scannum"] = line[0]
-        scan["ctdclock"] = line[1]
-        scan["Et"] = line[2]
-        scan["pres"] = -1. * float(line[3])
-        scan["Pstr"] = str('{:.5}'.format(line[3]))
-        scan["Tstr"] = str('{:.5}'.format(line[4]))
-        scan["Cstr"] = str('{:.5}'.format(line[5]))
-        scan["Sstr"] = str('{:.6}'.format(line[6]))
-        scan["Dstr"] = str('{:.6}'.format(line[7]))
-        scan["F1str"] = str('{:.5}'.format(line[8]))
-        scan["F2str"] = str('{:.5}'.format(line[9]))
-        scan["Lstr"] = str('{:.5}'.format(line[10]))
-        scan["Vstr"] = str('{:.5}'.format(line[11]))
-        #        scan["Et"] = xdatetime - basetime
-
-        #        scan["Dstr"] = str('{:.5}'.format(self.dens0(np.float(line[6]),np.float(line[4]))-1000.0))
-        scan["OK"] = True
-        return (scan)
-
-    def convert_simulation_b95(self, line):
-        scan = dict()
-
-        #        xdatetime = datetime.datetime.strptime(ctdclock,'%H:%M:%S')
-        #        if basetime = 0 :
-        #                 basetime = xdatetime
-        #        scan["ctdclock"] = line[0]
-        scan["ctdclock"] = "00:11:22"
-        scan["pres"] = -1. * float(line[0])
-        scan["Pstr"] = str('{:.4}'.format(line[0]))
-        scan["Sstr"] = str('{:.4}'.format(line[2]))
-        scan["Tstr"] = str('{:.4}'.format(line[3]))
-        scan["Cstr"] = str('{:.4}'.format(line[1]))
-        scan["F1str"] = str('{:.4}'.format(line[6]))
-        scan["F2str"] = str('{:.4}'.format(line[7]))
-        scan["Lstr"] = str('{:.4}'.format(line[5]))
-        scan["Vstr"] = str('{:.4}'.format("12.5"))
-        #        scan["Et"] = xdatetime - basetime
-        scan["Et"] = "0"
-        scan["Dstr"] = str('{:.4}'.format(self.dens0(np.float(line[2]), np.float(line[3])) - 1000.0))
-        scan["OK"] = True
         return (scan)
 
     # Code Borrowed from seawater-3.3.2-py.27.egg
