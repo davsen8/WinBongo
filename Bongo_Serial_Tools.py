@@ -5,7 +5,10 @@ import datetime
 import numpy as np
 
 import threading
-import Queue
+try:
+    import queue
+except:
+    import Queue as queue
 
 #DEFAULT_COM = "COM1"
 #DEFAULT_BAUD = 1200
@@ -132,10 +135,9 @@ class SerialSource_SBE19p(threading.Thread):
                 self.ser.flushInput()  # flush input buffer, discarding all its contents
                 self.ser.flushOutput()  # flush output buffer, aborting current output
 
-                # and discard all that is in buffer
-
-                # write data
-                self.ser.write("\r")
+                CR = "\r"
+                CR3 = "\r\r\r"
+                self.ser.write(CR.encode())
 #                print("write data: CR CR CR")
                 response = ""
                 status = ""
@@ -144,7 +146,7 @@ class SerialSource_SBE19p(threading.Thread):
                 MAX_TRYS = 20
                 while (response.find("S>")==-1) and (trys <= MAX_TRYS):
                     #              self.ser.flushInput() #flush input buffer, discarding all its contents
-                    self.ser.write("\r\r\r")
+                    self.ser.write(CR3.encode())
                     time.sleep(0.1)
                     while (self.ser.inWaiting() >= 2) and (sleeps < MAX_TRYS):
                         time.sleep(0.05)
@@ -203,7 +205,7 @@ class SerialSource_SBE19p(threading.Thread):
 
                 command_size = len(command)
 #            print("sending command " + command + " " + str(command_size))
-                self.ser.write(command)
+                self.ser.write(command.encode())  # in python 3 chars are unicode, and need recoding for serial
                 while (self.ser.inWaiting() < command_size):
                     time.sleep(0.005)
 
@@ -269,17 +271,19 @@ class SerialSource_SBE19p(threading.Thread):
 
     def send_Stop_Data(self):
         self.pause_data_feed()
-        self.StreamOn = False   # should stop thread procesing further data
-        self.ser.write("STOP\r")   # stop doesnt echo so dont use Send_Command
-        self.flush()  #clear the S> prompt and data lines left in buffer
+        self.StreamOn = False   # should stop thread proccesing further data
+        command = "STOP\r"
+        self.ser.write(command.encode())   # stop doesnt echo or require a wakeup so dont use Send_Command
+        self.flush()  #clear the S> prompt and any data lines left in buffer
 
     def send_InitLogging(self):  # put ctd to sleep
-
         self.Send_Command('INITLOGGING')
         self.ser.flushInput()
 
-    def send_QS(self):  # put ctd to sleep Qs doesnt edcho so dont use Send_Command
-        self.ser.write("QS\r")
+    def send_QS(self):  # put ctd to sleep Qs doesnt echo so dont use Send_Command
+        if self.Send_Wake():   # we dont know if it is awake or in QS so wake anyway and then put to QS
+            command = "QS\r"
+            self.ser.write(command.encode())
 
 
     def send_Set_DataRate(self, rate):

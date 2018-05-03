@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
-#WinBongo2.py   D.Senciall  April 2015
-# update June 1 2015 to fix incorrect pressure conversion in realtime data reader for std-12
+
 """
+
+WinBongo2.py   D.Senciall  March 2018
+
 Elements BASED ON CODE SAMPLE FROM: matplotlib-with-wxpython-guis by E.Bendersky
 Eli Bendersky (eliben@gmail.com)
 License: this code is in the public domain
@@ -12,11 +14,17 @@ seee   http://eli.thegreenplace.net/2008/08/01/matplotlib-with-wxpython-guis/
 
 Also
  Code Borrowed from seawater-3.3.2-py.27.egg for the density calcuations
+
 """
+
 import os
 import sys
 import wx
-import Queue
+try:
+    import queue
+except:
+    import Queue as queue
+
 import json
 
 import serial
@@ -49,8 +57,10 @@ ID_STOP_ARC = wx.NewId()
 ID_SER_CONF = wx.NewId()
 ID_INIT = wx.NewId()
 ID_STATUS = wx.NewId()
+ID_STOP = wx.NewId()
+ID_WAKE = wx.NewId()
 
-VERSION = "V2.0 March 2018"
+VERSION = "V2.01 April 2018"
 TITLE = "WinBongo2"
 
 CTD="SBE"
@@ -160,7 +170,7 @@ class GraphFrame(wx.Frame):
             self.set_default_com_cfg(self.ser)
             self.on_ser_config(-1)
 
-        self.BQueue = Queue.Queue()
+        self.BQueue = queue.Queue()
 
         CTD = "SBE"
 
@@ -243,6 +253,13 @@ class GraphFrame(wx.Frame):
         menu_realtime.AppendSeparator()
         self.m_getctdstatus = menu_realtime.Append(ID_STATUS, "Get CTD status", "CTD Status (DS)")
         self.Bind(wx.EVT_MENU, self.on_get_ctd_status, self.m_getctdstatus)
+        menu_realtime.AppendSeparator()
+        menu_realtime.AppendSeparator()
+        self.m_sendwake = menu_realtime.Append(ID_WAKE, "Wake CTD", "Wake CTD")
+        self.Bind(wx.EVT_MENU, self.on_sendwake, self.m_sendwake)
+        menu_realtime.AppendSeparator()
+        self.m_sendstop = menu_realtime.Append(ID_STOP, "Force a Stop on Data", "CTD STOP ")
+        self.Bind(wx.EVT_MENU, self.on_sendstop, self.m_sendstop)
 
 
         menu_archived = wx.Menu()
@@ -283,6 +300,8 @@ class GraphFrame(wx.Frame):
         m_arcstop.Enable(False)
         self.m_initlogger.Enable(False)
         self.m_getctdstatus.Enable(False)
+
+        self.m_sendstop.Enable(True)
 #        m_edithead(False)
 #        m_term.Enable (False)  # leave off for now
         m_basehead.Enable(False)
@@ -749,7 +768,23 @@ class GraphFrame(wx.Frame):
 #        frame_terminal.Destroy()
 
 # Realtime -> start  opens serial port and log file for realtime data
-        
+
+    def on_sendwake(self,event):
+        if self.DataSource == None:
+
+            if (CTD == "SBE"):
+                self.DataSource = SerialSource_SBE19p(self.ser, self.BQueue)
+                self.DataSource.start()
+            self.flash_status_message("Waking CTD")
+            status = self.DataSource.Send_Wake()
+            if status:
+                self.flash_status_message("CTD AWAKE")
+                self.m_initlogger.Enable(True)
+                self.m_getctdstatus.Enable(True)
+            else:
+                self.flash_status_message("CTD **NOT** WAKING")
+
+
     def on_start_rt (self, event):
 
         self.LogFileName = self.save_file_dialog()  # get filename of desired logfile
@@ -994,13 +1029,37 @@ class GraphFrame(wx.Frame):
         if self.ser.isOpen():
             if self.DataSource != None:
                 self.DataSource.send_InitLogging()
+                status = "OK"
+            else:
+                status = "Data Source not present"
+        else :
+            status = " DATASOURCE NOT OPEN"
+        self.message_box(status)
 
     def on_get_ctd_status(self,event):
         self.flash_status_message("Getting CTD Status message")
-        status = self.DataSource.Get_CTD_Status()
-            #        print (status)
+        if self.ser.isOpen():
+            if self.DataSource != None:
+                status = self.DataSource.Get_CTD_Status()
+            else:
+                status = "Data Source not present"
+        else :
+            status = " DATASOURCE NOT OPEN"
         self.message_box(status)
-    
+
+    def on_sendstop(self,event):
+        self.flash_status_message("Sending a Blind STOP to CTD")
+        if self.ser.isOpen():
+            if self.DataSource != None:
+                self.DataSource.send_Stop_Data()
+                status = "OK - try a Get CTD Status to check"
+            else:
+                status = "Data Source not present"
+        else :
+            status = " DATASOURCE NOT OPEN"
+        self.message_box(status)
+
+
     def on_exit(self, event):
         if self.runlogfile != None:
           self.runlogfile.close()

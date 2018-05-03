@@ -7,8 +7,8 @@
 #
 # SPDX-License-Identifier:    BSD-3-Clause
 import sys
-reload(sys)
-sys.setdefaultencoding("ISO-8859-1")
+#reload(sys)
+#sys.setdefaultencoding("ISO-8859-1")
 import wx
 import serial
 import serial.tools.list_ports
