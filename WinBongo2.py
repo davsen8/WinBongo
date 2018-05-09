@@ -9,8 +9,7 @@ Elements BASED ON CODE SAMPLE FROM: matplotlib-with-wxpython-guis by E.Bendersky
 Eli Bendersky (eliben@gmail.com)
 License: this code is in the public domain
 Last modified: 31.07.2008
-
-seee   http://eli.thegreenplace.net/2008/08/01/matplotlib-with-wxpython-guis/
+see   http://eli.thegreenplace.net/2008/08/01/matplotlib-with-wxpython-guis/
 
 Also
  Code Borrowed from seawater-3.3.2-py.27.egg for the density calcuations
@@ -20,7 +19,7 @@ Also
 import os
 import sys
 import wx
-try:
+try:        #  2.7 vs 3.65 versions of queue class
     import queue
 except:
     import Queue as queue
@@ -29,7 +28,7 @@ import json
 
 import serial
 
-#import WINAQU_GUI_BONGO
+
 
 # The recommended way to use wx graphics and matplotlib (mpl) is with the WXAgg
 # backend. 
@@ -45,7 +44,7 @@ from mpl_toolkits.axes_grid1.parasite_axes import HostAxes, ParasiteAxes
 
 import wxSerialConfigDialog
 #import wxTerminal_NAFC
-# from WinAquireHdr import WINAQU_GUI
+from WinAquireHdr import WINAQU_GUI
 
 from  Bongo_Serial_Tools import *
 #import wxTerminal_NAFC
@@ -59,8 +58,9 @@ ID_INIT = wx.NewId()
 ID_STATUS = wx.NewId()
 ID_STOP = wx.NewId()
 ID_WAKE = wx.NewId()
+ID_RESET = wx.NewId()
 
-VERSION = "V2.01 April 2018"
+VERSION = "V2.02 May 2018"
 TITLE = "WinBongo2"
 
 CTD="SBE"
@@ -273,9 +273,11 @@ class GraphFrame(wx.Frame):
         m_basehead = menu_option.Append(-1, "Set ship trip stn", "shiptripstn")
         self.Bind(wx.EVT_MENU, self.on_set_base_header, m_basehead)
         menu_option.AppendSeparator()
-#        m_edithead = menu_option.Append(-1, "Edit File Header", "Edit File Header")
-#        self.Bind(wx.EVT_MENU, self.on_edit_head, m_edithead)
-#        menu_option.AppendSeparator()
+
+        m_edithead = menu_option.Append(-1, "Edit File Header", "Edit File Header")
+        self.Bind(wx.EVT_MENU, self.on_edit_head, m_edithead)
+        menu_option.AppendSeparator()
+
         menu_option.AppendSeparator()
         self.cb_grid = menu_option.Append (-1,"Show Grid","Grid",kind=wx.ITEM_CHECK)
         self.Bind(wx.EVT_MENU, self.on_cb_grid, self.cb_grid)
@@ -639,12 +641,14 @@ class GraphFrame(wx.Frame):
             return()
 
         if  not self.MonitorRun :
+            self.draw_plot()
             return()
         else:
             if not self.BQueue.empty():
                 tries = 0
                 block = self.BQueue.get()
             else:   # Empty Queue
+                self.draw_plot()
                 return()
 
         if block["OK"]:
@@ -744,7 +748,7 @@ class GraphFrame(wx.Frame):
             defaultDir=os.getcwd(),
             defaultFile="plot.png",
             wildcard=file_choices,
-            style=wx.SAVE|wx.FD_OVERWRITE_PROMPT)
+            style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
         
         if dlg.ShowModal() == wx.ID_OK:
             path = dlg.GetPath()
@@ -819,7 +823,7 @@ class GraphFrame(wx.Frame):
         self.DataSource.Send_Wake()
 
 
-        self.on_get_ctd_status(-1)
+#        self.on_get_ctd_status(-1)
 
         self.flash_status_message("SETTING CTD TO REAL TIME MODE")
         self.DataSource.send_Real()
@@ -881,6 +885,9 @@ class GraphFrame(wx.Frame):
         menubar.Enable(ID_STOP_RT,not enabled)
         menubar.Enable(ID_SER_CONF, True)
 
+        self.m_initlogger.Enable(False)
+        self.m_getctdstatus.Enable(False)
+
 #        menubar.EnableTop(2, True)  # re-enable archieved data option
         self.monitor_button.Enable(False)
         self.GraphRun_button.Enable(False)
@@ -924,10 +931,10 @@ class GraphFrame(wx.Frame):
         self.GraphRun_button.Enable(False)
         menubar.EnableTop(1, True)  # re-enable realtime data option
 
-#    def on_edit_head(self,event):
+    def on_edit_head(self,event):
 #        if self.RT_source == True:
 #            self.on_stop_rt (1)
-#        WINAQU_GUI.main()
+        WINAQU_GUI.main()
 
     def on_set_base_header(self,event):
         xx = ShipTrip_Dialog(self,self.hd1["SHIP"],self.hd1["TRIP"],self.hd1["STN"])
@@ -1037,7 +1044,7 @@ class GraphFrame(wx.Frame):
         self.message_box(status)
 
     def on_get_ctd_status(self,event):
-        self.flash_status_message("Getting CTD Status message")
+        self.flash_status_message("Getting CTD Status message (May take 20 seconds....)")
         if self.ser.isOpen():
             if self.DataSource != None:
                 status = self.DataSource.Get_CTD_Status()

@@ -9,6 +9,7 @@
 
 import wx
 import wx.xrc
+#from WinAquireHdr.AquireGUI_Validate import IntRangeValidator
 from WinAquireHdr.AquireGUI_Validate import IntRangeValidator
 ###########################################################################
 ## Class HDR_DIALOG
@@ -19,7 +20,7 @@ class HDR_DIALOG ( wx.Dialog ):
         def __init__( self, parent ):
                 wx.Dialog.__init__ ( self, parent, id = wx.ID_ANY, title = u"WinAquire Header Editor", pos = wx.DefaultPosition, size = wx.DefaultSize, style = wx.DEFAULT_DIALOG_STYLE )
                 
-                self.SetSizeHintsSz( wx.DefaultSize, wx.DefaultSize )
+                self.SetSizeHints( wx.DefaultSize, wx.DefaultSize )
                 self.SetBackgroundColour( wx.Colour( 208, 208, 208 ) )
                 
                 FULL_PAGE = wx.FlexGridSizer( 3, 1, 0, 0 )
@@ -293,7 +294,7 @@ class HDR_DIALOG ( wx.Dialog ):
                 
                 OTHER_DATA_GRID.Add( self.FORMAT_LABEL, 0, wx.ALIGN_CENTER_VERTICAL|wx.ALL, 5 )
                 
-                self.FORMAT = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 30,-1 ), wx.TE_CAPITALIZE )
+                self.FORMAT = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 30,-1 ), 0 )
                 self.FORMAT.SetMaxLength( 1 ) 
                 self.FORMAT.SetFont( wx.Font( 12, 74, 90, 90, False, "Arial" ) )
                 
@@ -626,10 +627,11 @@ class HDR_DIALOG ( wx.Dialog ):
                 return_id = wx.NewId()
                 acc_table = wx.AcceleratorTable([(wx.ACCEL_NORMAL, wx.WXK_RETURN, return_id)])
                 self.SetAcceleratorTable(acc_table)
-                wx.EVT_MENU(self, return_id, self.on_return)
+#                wx.EVT_MENU(self, return_id, self.on_return)
+                self.Bind(wx.EVT_MENU, self.on_return, id=return_id)
                 self.Centre( wx.BOTH )
         def on_return(self, event):
-                ctl = wx.Window_FindFocus()
+                ctl = wx.Window.FindFocus()
                 ctl.Navigate()
 # self.SetAcceleratorTable(wx.NullAcceleratorTable)
 ############

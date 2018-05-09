@@ -89,7 +89,7 @@ class SerialSource_SBE19p(threading.Thread):
         self.pause = True
 
     def next(self):
-        line = self.ser.readline()
+        line = self.ser.readline().decode()
         return (line)
 
     def run(self):
@@ -137,24 +137,29 @@ class SerialSource_SBE19p(threading.Thread):
 
                 CR = "\r"
                 CR3 = "\r\r\r"
-                self.ser.write(CR.encode())
+                self.ser.write(CR.encode('utf-8'))
 #                print("write data: CR CR CR")
                 response = ""
                 status = ""
                 trys = 0
                 sleeps = 0
                 MAX_TRYS = 20
-                while (response.find("S>")==-1) and (trys <= MAX_TRYS):
+                prompt = "S>"
+
+                while (response.find(prompt)==-1) and (trys <= MAX_TRYS):
                     #              self.ser.flushInput() #flush input buffer, discarding all its contents
                     self.ser.write(CR3.encode())
                     time.sleep(0.1)
+#                    print('in waiting= ',self.ser.inWaiting())
                     while (self.ser.inWaiting() >= 2) and (sleeps < MAX_TRYS):
                         time.sleep(0.05)
                         sleeps += 1
-#                        print("sleeps=" + str(sleeps))
-#                    if (sleeps < MAX_TRYS):
+#                        print('in waiting2 = ',self.ser.inWaiting(),'response= ',response)
+
                         ammount = self.ser.inWaiting()
-                        response = response + self.ser.read(ammount)
+#                        print ("ammonut= ",ammount)
+                        response =  self.ser.read(ammount).decode()
+#                        print ('resp= ',response)
 #                        print ("trys=" + str(ammount) + str(trys)+ ' ' + response)
                     sleeps = 0
 
@@ -162,7 +167,7 @@ class SerialSource_SBE19p(threading.Thread):
 
                 time.sleep(0.05)
                 self.ser.flushInput()  # flush input buffer, discarding all its contents clear any Seacat
-
+#                print ('trys= ',trys)
                 if (trys > MAX_TRYS):
                     status = False
                 else:
@@ -171,7 +176,7 @@ class SerialSource_SBE19p(threading.Thread):
 #                print("awake " + status + response + " " + str(trys))
 
             except Exception as e1:
-#                print ("error communicating...: " + str(e1))
+                print ("wake-ctd error communicating...: " + str(e1))
                 status = False
 
         else:
@@ -209,10 +214,11 @@ class SerialSource_SBE19p(threading.Thread):
                 while (self.ser.inWaiting() < command_size):
                     time.sleep(0.005)
 
-                response = self.ser.read(command_size)
+                response = self.ser.read(command_size).decode()
 
                 # SBE19p returns ?cmd S>   if command is not recognized
-                if (responce.find('?c')) != -1:
+                ERROR_CODE = '?c'
+                if responce.find(ERROR_CODE) != -1:
                     self.ser.flushInput()
                     return False
             else:
@@ -221,7 +227,7 @@ class SerialSource_SBE19p(threading.Thread):
 
 #            print("read data: " + response)
         except Exception as e1:
-#            print("error communicating...: " + str(e1))
+            print("send-command error communicating...: " + str(e1))
             return False
 
         return True
@@ -236,7 +242,7 @@ class SerialSource_SBE19p(threading.Thread):
                 status = ''
                 response = ''
                 while response != 'S>':
-                    response = self.ser.readline()
+                    response = self.ser.readline().decode()
                     if response != "":
                         status += response
                         numOfLines = numOfLines + 1
@@ -245,7 +251,7 @@ class SerialSource_SBE19p(threading.Thread):
                 # having both CR and LF causes double spacing when displayed in window so string CR's out
                 status = status.replace('\r', ' ', 20)
             except Exception as e1:
-                print ("error communicating...: " + str(e1))
+                print ("get-response error communicating...: " + str(e1))
         else:
 #            print ("cannot open serial port ")
             status = 'ERROR'

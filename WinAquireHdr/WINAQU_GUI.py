@@ -3,8 +3,8 @@ import wx
 import os,sys
  
 #import the created GUI file and Parser
+#from WinAquireHdr import AquireGUI4, ParseNafcHdr
 from WinAquireHdr import AquireGUI4, ParseNafcHdr
-
 
 #inherit from the MainFrame created in wxFowmBuilder and create CalcFrame
 class EditHdr(AquireGUI4.HDR_DIALOG):
@@ -190,6 +190,7 @@ def main ():
   HdrDicts=dict(hdr0=hdr0dict,hdr1=hdr1dict,hdr4=hdr4dict,hdr8=hdr8dict)
   afiletype=""
   global DataChanged
+  outfilename =""
 
   DataChanges = False
 #mandatory in wx, create an app, False stands for not deteriction stdin/stdout
@@ -240,12 +241,12 @@ def main ():
 #after edit is done
 
   if DataChanged:
-        print("saving file", outfilename)
-#        f=open(outfilename,"r+")
-        oK= ParseNafcHdr.Write_NAFC_File_Hdr(outfilename, cards["h0"], HdrDicts)
-#        f.flush()
-#        os.fsync(f.fileno())
-#        f.close()
+#        print("saving file", outfilename)
+        f=open(outfilename,"r+")
+        oK= ParseNafcHdr.Write_NAFC_File_Hdr(f, cards["h0"], HdrDicts)
+        f.flush()
+        os.fsync(f.fileno())
+        f.close()
 ###################### Program entry point ###############################
 if __name__ == '__main__':
     main()

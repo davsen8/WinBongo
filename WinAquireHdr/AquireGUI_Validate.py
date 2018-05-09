@@ -1,7 +1,7 @@
 import wx
 
 
-class IntRangeValidator(wx.PyValidator):
+class IntRangeValidator(wx.Validator):
      """ This validator is used to check integer values between a range
      """
      def __init__(self,minflag,maxflag):
@@ -109,7 +109,7 @@ class IntRangeValidator(wx.PyValidator):
                       fval = float(val)
                       
                     if err or (fval < self._min or fval > self._max):
-                      if not wx.Validator_IsSilent():
+                      if not wx.Validator.IsSilent():
                         wx.Bell()
                         msg = "value must be between %d and %d val is %s" % \
                  (self._min, self._max,val)
