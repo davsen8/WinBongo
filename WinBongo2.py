@@ -44,6 +44,7 @@ from mpl_toolkits.axes_grid1.parasite_axes import HostAxes, ParasiteAxes
 
 import wxSerialConfigDialog
 #import wxTerminal_NAFC
+#from WinAquireHdr import WINAQU_Thread
 from WinAquireHdr import WINAQU_GUI
 
 from  Bongo_Serial_Tools import *
@@ -934,7 +935,11 @@ class GraphFrame(wx.Frame):
     def on_edit_head(self,event):
 #        if self.RT_source == True:
 #            self.on_stop_rt (1)
+#        hdr_edit = WINAQU_Thread.winaqu_thread()
+#        hdr_edit.start()
         WINAQU_GUI.main()
+
+
 
     def on_set_base_header(self,event):
         xx = ShipTrip_Dialog(self,self.hd1["SHIP"],self.hd1["TRIP"],self.hd1["STN"])
@@ -1004,8 +1009,8 @@ class GraphFrame(wx.Frame):
 
 
     def set_default_com_cfg(self,ser):  # Defaults as specified
-        DEFAULT_COM = "COM3"
-        DEFAULT_BAUD = 4800
+        DEFAULT_COM = "COM1"
+        DEFAULT_BAUD = 1200
 
         ser.port = DEFAULT_COM
         ser.baudrate = DEFAULT_BAUD
