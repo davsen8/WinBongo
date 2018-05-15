@@ -19,6 +19,7 @@ Also
 import os
 import sys
 import wx
+import wx.adv
 try:        #  2.7 vs 3.65 versions of queue class
     import queue
 except:
@@ -60,7 +61,7 @@ ID_STOP = wx.NewId()
 ID_WAKE = wx.NewId()
 ID_RESET = wx.NewId()
 
-VERSION = "V2.02 May 2018"
+VERSION = "V2.03 May 2018"
 TITLE = "WinBongo2"
 
 CTD="SBE"
@@ -248,18 +249,7 @@ class GraphFrame(wx.Frame):
         m_rtstop = menu_realtime.Append(ID_STOP_RT, "End", "End realtime data")
         self.Bind(wx.EVT_MENU, self.on_stop_rt, m_rtstop)
         menu_realtime.AppendSeparator()
-        self.m_initlogger = menu_realtime.Append(ID_INIT, "Initial Logger", "Clear ctd Memmory")
-        self.Bind(wx.EVT_MENU, self.on_init_logger, self.m_initlogger)
-        menu_realtime.AppendSeparator()
-        self.m_getctdstatus = menu_realtime.Append(ID_STATUS, "Get CTD status", "CTD Status (DS)")
-        self.Bind(wx.EVT_MENU, self.on_get_ctd_status, self.m_getctdstatus)
-        menu_realtime.AppendSeparator()
-        menu_realtime.AppendSeparator()
-        self.m_sendwake = menu_realtime.Append(ID_WAKE, "Wake CTD", "Wake CTD")
-        self.Bind(wx.EVT_MENU, self.on_sendwake, self.m_sendwake)
-        menu_realtime.AppendSeparator()
-        self.m_sendstop = menu_realtime.Append(ID_STOP, "Force a Stop on Data", "CTD STOP ")
-        self.Bind(wx.EVT_MENU, self.on_sendstop, self.m_sendstop)
+
 
 
         menu_archived = wx.Menu()
@@ -269,13 +259,29 @@ class GraphFrame(wx.Frame):
         m_arcstop = menu_archived.Append(ID_STOP_ARC, "End", "End archived data")
         self.Bind(wx.EVT_MENU, self.on_stop_arc, m_arcstop)
 
+        menu_ctd_control = wx.Menu()
+        self.m_sendwake = menu_ctd_control.Append(ID_WAKE, "Wake CTD", "Wake CTD")
+        self.Bind(wx.EVT_MENU, self.on_sendwake, self.m_sendwake)
+        menu_ctd_control.AppendSeparator()
+        menu_ctd_control.AppendSeparator()
+        self.m_getctdstatus = menu_ctd_control.Append(ID_STATUS, "Get CTD status", "CTD Status (DS)")
+        self.Bind(wx.EVT_MENU, self.on_get_ctd_status, self.m_getctdstatus)
+        menu_ctd_control.AppendSeparator()
+        menu_ctd_control.AppendSeparator()
+        self.m_initlogger = menu_ctd_control.Append(ID_INIT, "Initial Logger", "Clear ctd Memmory")
+        self.Bind(wx.EVT_MENU, self.on_init_logger, self.m_initlogger)
+        menu_realtime.AppendSeparator()
+        self.m_sendstop = menu_ctd_control.Append(ID_STOP, "Force a Stop on Data", "CTD STOP ")
+        self.Bind(wx.EVT_MENU, self.on_sendstop, self.m_sendstop)
         menu_option = wx.Menu()
+
+
         m_basehead = menu_option.Append(-1, "Set ship trip stn", "shiptripstn")
         self.Bind(wx.EVT_MENU, self.on_set_base_header, m_basehead)
         menu_option.AppendSeparator()
 
-        m_edithead = menu_option.Append(-1, "Edit File Header", "Edit File Header")
-        self.Bind(wx.EVT_MENU, self.on_edit_head, m_edithead)
+#        m_edithead = menu_option.Append(-1, "Edit File Header", "Edit File Header")
+#        self.Bind(wx.EVT_MENU, self.on_edit_head, m_edithead)
         menu_option.AppendSeparator()
 
         menu_option.AppendSeparator()
@@ -293,6 +299,7 @@ class GraphFrame(wx.Frame):
         self.menubar.Append(menu_file, "&File")
         self.menubar.Append(menu_realtime, "RealTime")
         self.menubar.Append(menu_archived, "Archived")
+        self.menubar.Append(menu_ctd_control, "CTD_Control")
         self.menubar.Append(menu_option, "Options")
         self.menubar.Append(menu_help,"Help")
         self.SetMenuBar(self.menubar)
@@ -932,12 +939,12 @@ class GraphFrame(wx.Frame):
         self.GraphRun_button.Enable(False)
         menubar.EnableTop(1, True)  # re-enable realtime data option
 
-    def on_edit_head(self,event):
+#    def on_edit_head(self,event):
 #        if self.RT_source == True:
 #            self.on_stop_rt (1)
 #        hdr_edit = WINAQU_Thread.winaqu_thread()
 #        hdr_edit.start()
-        WINAQU_GUI.main()
+#        WINAQU_GUI.main()
 
 
 
@@ -1045,7 +1052,7 @@ class GraphFrame(wx.Frame):
             else:
                 status = "Data Source not present"
         else :
-            status = " DATASOURCE NOT OPEN"
+            status = " DATASOURCE NOT OPEN  - try a Wake CTD first"
         self.message_box(status)
 
     def on_get_ctd_status(self,event):
@@ -1056,19 +1063,29 @@ class GraphFrame(wx.Frame):
             else:
                 status = "Data Source not present"
         else :
-            status = " DATASOURCE NOT OPEN"
+            status = " DATASOURCE NOT OPEN - Try a Wake CTD first"
         self.message_box(status)
 
     def on_sendstop(self,event):
-        self.flash_status_message("Sending a Blind STOP to CTD")
-        if self.ser.isOpen():
-            if self.DataSource != None:
-                self.DataSource.send_Stop_Data()
-                status = "OK - try a Get CTD Status to check"
-            else:
-                status = "Data Source not present"
-        else :
+
+        if not self.ser.isOpen() or self.DataSource != None:
+            if (CTD == "SBE"):
+                self.DataSource = BST.SerialSource_SBE19p(self.ser, self.BQueue)
+                self.DataSource.start()
+
+        if self.ser.isOpen() and self.DataSource != None:
+
+            self.flash_status_message("Sending a Blind STOP to CTD")
+            self.DataSource.send_Stop_Data()
+            self.flash_status_message("Sending a reset to Profile mode")
+            self.DataSource.send_Reset_factory()
+            self.flash_status_message("Closing data connection")
+            self.DataSource.shut_down()
+            self.DataSource = None
+            status = "OK stop sent- and a reset to profile mode\n Try a Wake CTD then a Get CTD Status to check"
+        else:
             status = " DATASOURCE NOT OPEN"
+
         self.message_box(status)
 
 
@@ -1114,7 +1131,7 @@ class GraphFrame(wx.Frame):
 
     def OnAbout(self,event):
         """ Show About Dialog """
-        info = wx.AboutDialogInfo()
+        info = wx.adv.AboutDialogInfo()
 
         desc = ["\nWinBongo\n",
                 "Platform Info: (%s,%s)",
@@ -1134,7 +1151,7 @@ class GraphFrame(wx.Frame):
                              "\n NWAFC, Nl region-DFO, Gov. of Canada"])
         info.SetCopyright ("Note: Some elements based on open community code:\nSee Source for credits")
 #        info.SetDescription (desc % (py_version, wx_info))
-        wx.AboutBox(info)
+        wx.adv.AboutBox(info)
         
 #******** END of GraphFrame ************************************************************
 
