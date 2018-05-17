@@ -668,9 +668,18 @@ class GraphFrame(wx.Frame):
     
     def get_file_dialog(self):
         filename = None
-        dialog = wx.FileDialog(None, "Choose File.",os.getcwd(), "", "BONGO Dat-File|*.dat|All Files|*",wx.FD_OPEN|wx.FD_FILE_MUST_EXIST)
+        dialog = wx.FileDialog(
+            None,
+            message = "Choose File.",
+#            defaultDir = os.getcwd(),
+            defaultFile = "",
+            wildcard = "BONGO Dat-File|*.dat|All Files|*",
+            style = wx.FD_OPEN|wx.FD_FILE_MUST_EXIST)
+
         if dialog.ShowModal() == wx.ID_OK:
-            filename =  dialog.GetPath()  
+            filename =  dialog.GetPath()
+        else:
+            return False
         dialog.Destroy()
         return(filename)
     
@@ -682,7 +691,7 @@ class GraphFrame(wx.Frame):
             self, 
             message="Save plot as...",
             defaultDir=os.getcwd(),
-            defaultFile="plot.png",
+            defaultFile=self.basename+".png",
             wildcard=file_choices,
             style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
         
@@ -833,7 +842,7 @@ class GraphFrame(wx.Frame):
 #************************ archieve data ***************************
     def on_start_arc(self, event):
         FileName = self.get_file_dialog()  #get filename of logged file
-        if FileName !="" :
+        if FileName != None :
             self.RT_source = False
             self.ARC_source = True
             self.host.set_title('Bongo trace data file= '+FileName, size=8) # label plot            
@@ -842,16 +851,19 @@ class GraphFrame(wx.Frame):
             menubar.Enable(ID_START_ARC,not enabled)
             enabled = menubar.IsEnabled(ID_STOP_ARC)
             menubar.Enable(ID_STOP_ARC,not enabled)
-            menubar.EnableTop(1, False)  # lock out RT playback while Archieved running
-            self.monitor_button.Enable(True)
+            menubar.EnableTop(1, False)  # lock out RT playback while Archived running
+            self.monitor_button.Enable(False)
             self.GraphRun_button.Enable(True)            
 #            self.datagen = DataGen2(FileName) #Create a data source instance
 #            self.fig.clf()
-            self.data["Pres"]=[0]
-            self.data["Temp"]=[0]
-            self.data["Et"]=[0]
+#            self.data["Pres"]=[0]
+#            self.data["Temp"]=[0]
+#            self.data["Et"]=[0]
             self.DataSource = BFT.read_from_file(FileName,self.BQueue)
             self.DataSource.start()
+        else:
+            self.flash_status_message("PlayBack skipped")
+            return ()
 
     def on_stop_arc (self, event):
         if self.MonitorRun:

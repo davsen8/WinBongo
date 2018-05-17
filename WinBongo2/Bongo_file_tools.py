@@ -91,7 +91,6 @@ class read_from_file(threading.Thread):
         self.fp.close()
         return
 
-
     def send_StartNow_Data(self):
         self.StreamOn = True
 
@@ -104,8 +103,6 @@ class read_from_file(threading.Thread):
         self.pause_data_feed()
         self.shutdown = True
         self.fp.close()
-
-
 
     def convert_datafile(self,line):
         scan = dict()
@@ -130,8 +127,6 @@ class read_from_file(threading.Thread):
             scan["OK"] = True
             scan["Et"] = float(line[2])
 
-            for i in scan:
-                print(i, scan[i])
         except:
             scan["OK"] = False
 
