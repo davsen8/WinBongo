@@ -48,6 +48,9 @@ import wxSerialConfigDialog
 #from WinAquireHdr import WINAQU_GUI
 
 import Bongo_Serial_Tools as BST
+import Bongo_file_tools as BFT
+from  Bongo_window_tools import *
+
 #import wxTerminal_NAFC
 
 ID_START_RT = wx.NewId()
@@ -61,94 +64,13 @@ ID_STOP = wx.NewId()
 ID_WAKE = wx.NewId()
 ID_RESET = wx.NewId()
 
-VERSION = "V2.03 May 2018"
+VERSION = "V2.05 May 17 2018"
 TITLE = "WinBongo2"
 
 CTD="SBE"
 SIMULATOR = False
 
 
-    
-class RollingDialBox(wx.Panel):
-    """ Displays the realtime data values, even when graph is paused. size = 50 for most
-    """
-    def __init__(self, parent, ID, label, initval,size):
-        wx.Panel.__init__(self, parent, ID)
-        
-        self.value = initval
-
-        
-        box = wx.StaticBox(self, -1, label)
-        sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
-
-              
-        self.Data_text = wx.TextCtrl( self, wx.ID_ANY, self.value, wx.DefaultPosition,
-            wx.Size( size,-1 ), wx.TE_READONLY )
-        self.Data_text.SetMaxLength( 8 ) 
-        self.Data_text.SetFont( wx.Font( 10, 74, 90, 92, False, "Arial" ) )
-
-        sizer.Add(self.Data_text, 0, wx.ALL, 10)        
-        
-        self.SetSizer(sizer)
-        sizer.Fit(self)
-#*** END of RollingDial Box Class **************************
-
-class BoundControlBox(wx.Panel):
-    """ A static box with a couple of radio buttons and a text
-        box. Allows to switch between an automatic mode and a 
-        manual mode with an associated value.
-    """
-    def __init__(self, parent, ID, label, initval,start_val):
-        wx.Panel.__init__(self, parent, ID)
-        
-        self.value = initval
-        
-        box = wx.StaticBox(self, -1, label)
-        sizer = wx.StaticBoxSizer(box, wx.VERTICAL)
-
-        if (start_val == 0) :        
-            self.radio_auto = wx.RadioButton(self, -1, 
-                label="Auto " +"("+initval+")", style=wx.RB_GROUP)
-        else :
-            self.radio_auto = wx.RadioButton(self, -1, 
-                label="Auto", style=wx.RB_GROUP)
-            
-        self.radio_manual = wx.RadioButton(self, -1,
-            label="Manual")
-        self.manual_text = wx.TextCtrl(self, -1, 
-            size=(35,-1),
-            value=str(initval),
-            style=wx.TE_PROCESS_ENTER)
-             
-        self.Bind(wx.EVT_UPDATE_UI, self.on_update_manual_text, self.manual_text)
-        self.Bind(wx.EVT_TEXT_ENTER, self.on_text_enter, self.manual_text)
-        
-        manual_box = wx.BoxSizer(wx.HORIZONTAL)
-        manual_box.Add(self.radio_manual, flag=wx.ALIGN_CENTER_VERTICAL)
-        manual_box.Add(self.manual_text, flag=wx.ALIGN_CENTER_VERTICAL)
-
-   
-        sizer.Add(self.radio_auto, 0, wx.ALL, 10)
-        sizer.Add(manual_box, 0, wx.ALL, 10)
-        
-        self.SetSizer(sizer)
-        sizer.Fit(self)
-
-        self.radio_manual.SetValue(start_val)  # 1 is manual enabled, 0 is auto enabled
-    
-    def on_update_manual_text(self, event):
-        self.manual_text.Enable(self.radio_manual.GetValue())
-    
-    def on_text_enter(self, event):
-        self.value = self.manual_text.GetValue()
-    
-    def is_auto(self):
-        return self.radio_auto.GetValue()
-        
-    def manual_value(self):
-        return self.value
-    
-#*** End of Rolling DialBoxClass *************************************
 
 ####################################################################
 #   GraphFrame  -  Build the main frame of the application
@@ -163,6 +85,8 @@ class GraphFrame(wx.Frame):
         self.SetBackgroundColour('lightgray')   # affects the space arround buttons etc but not graph
 
         self.ser = serial.Serial()  # Create a serial com port access instance
+        self.ShipTripSet = {"YEAR": '1900', "SHIP": "39", "TRIP": "000", "SET": "000"}
+        self.basename = self.make_base_name()
 
         # get the last basename, and serial port parameters
         # if there is no pre-existing file Bongo.cfg a new one is name with default starting basename
@@ -190,7 +114,9 @@ class GraphFrame(wx.Frame):
         self.LogFileName ="Not Logging"
 
 
-        self.hd1=dict(SHIP="XX",TRIP="YYY",STN="000")
+
+        self.CTDSN = 'S4018'
+
         self.hship = "YY"
 # some default scales
         self.ymin= -200.0
@@ -215,7 +141,7 @@ class GraphFrame(wx.Frame):
 
 # the redraw timer is used to add new data to the plot and update any changes via
 # the on_redraw_timer method
-#10 ms; if you call at slower rate say 100 ms things may not respnd as quick, but there
+#100 ms; if you call at slower rate say 1000 ms things may not respond as quick
         self.redraw_timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self.on_redraw_timer, self.redraw_timer)        
         self.redraw_timer.Start(100)
@@ -230,12 +156,10 @@ class GraphFrame(wx.Frame):
         m_expt = menu_file.Append(-1, "&Save plot\tCtrl-S", "Save plot to file")
         self.Bind(wx.EVT_MENU, self.on_save_plot, m_expt)
         menu_file.AppendSeparator()
+
         m_ser_config = menu_file.Append(ID_SER_CONF, "Serial Config", "Serial Config")
         self.Bind(wx.EVT_MENU, self.on_ser_config, m_ser_config)
         menu_file.AppendSeparator()
-#        m_term = menu_file.Append(-1, "Launch Terminal", "Terminal")
-#        self.Bind(wx.EVT_MENU, self.on_term, m_term)
-#        menu_file.AppendSeparator()
         m_exit = menu_file.Append(-1, "E&xit\tCtrl-X", "Exit")
         self.Bind(wx.EVT_MENU, self.on_exit, m_exit)
 
@@ -273,16 +197,15 @@ class GraphFrame(wx.Frame):
         menu_realtime.AppendSeparator()
         self.m_sendstop = menu_ctd_control.Append(ID_STOP, "Force a Stop on Data", "CTD STOP ")
         self.Bind(wx.EVT_MENU, self.on_sendstop, self.m_sendstop)
+
         menu_option = wx.Menu()
-
-
         m_basehead = menu_option.Append(-1, "Set ship trip stn", "shiptripstn")
         self.Bind(wx.EVT_MENU, self.on_set_base_header, m_basehead)
         menu_option.AppendSeparator()
 
 #        m_edithead = menu_option.Append(-1, "Edit File Header", "Edit File Header")
 #        self.Bind(wx.EVT_MENU, self.on_edit_head, m_edithead)
-        menu_option.AppendSeparator()
+#        menu_option.AppendSeparator()
 
         menu_option.AppendSeparator()
         self.cb_grid = menu_option.Append (-1,"Show Grid","Grid",kind=wx.ITEM_CHECK)
@@ -311,11 +234,10 @@ class GraphFrame(wx.Frame):
         self.m_getctdstatus.Enable(False)
 
         self.m_sendstop.Enable(True)
-#        m_edithead(False)
-#        m_term.Enable (False)  # leave off for now
-        m_basehead.Enable(False)
 
-        self.menubar.EnableTop(2, False)  # lock out arc playback while rt running
+        m_basehead.Enable(True)
+
+#        self.menubar.EnableTop(2, False)  # lock out arc playback while rt running
 
 # ***********************************************************************************
     def create_main_panel(self):
@@ -375,10 +297,10 @@ class GraphFrame(wx.Frame):
         self.hbox0.Add(self.v_text, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
         self.hbox0.AddSpacer(20)
         
-# Row 1   - buttoms and rate     
+# Row 1   - buttoNs and rate
         self.hbox1 = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.ctd_clock_text = RollingDialBox(self.panel, -1, "CTD Clock", '0',60)
+        self.ctd_clock_text = RollingDialBox(self.panel, -1, "PC Clock", '0',60)
        
         self.hbox1.Add(self.monitor_button, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
         self.hbox1.AddSpacer(2)
@@ -389,6 +311,7 @@ class GraphFrame(wx.Frame):
         self.hbox1.Add(self.r_text, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
         self.hbox1.AddSpacer(10)
         self.hbox1.Add(self.ctd_clock_text, border=5, flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL)
+
 # Row 2  - scaling controls
         self.hbox2 = wx.BoxSizer(wx.HORIZONTAL)
         
@@ -479,6 +402,7 @@ class GraphFrame(wx.Frame):
             color=(1, 0, 0),
             )[0]
         self.axes = self.host
+
 #        start, end = ax.get_xlim()
 #        ax.xaxis.set_ticks(np.arange(start, end, 600)) 
 #        self.host.legend()
@@ -544,7 +468,7 @@ class GraphFrame(wx.Frame):
         else:
             self.Uslope = int(self.UpSlope_control.manual_value())
 
-# 60 is acutally samples per minute from ctd, default is 1/sec but should be a var really
+# 60 is actually samples per minute from ctd, default is 1/sec but should be a var really
 # neg 60 is to handle depth negative
         DEFAULT_RATE = 1.0
         SlopeTime1 = (ymin/self.Dslope)*-60.0/DEFAULT_RATE
@@ -589,12 +513,13 @@ class GraphFrame(wx.Frame):
 
 #*** ACTION METHODS ***************        
     def on_GraphRun_button(self, event):
-        if  not self.DataSource == None :
+        if  self.DataSource != None :
             self.GraphRun = not self.GraphRun
-            self.on_update_GraphRun_button(event)
             if self.GraphRun == True:
-                self.MonitorRun = True
-                self.on_update_monitor_button(event)
+                if not self.MonitorRun:
+                    self.on_monitor_button(event)
+
+            self.on_update_GraphRun_button(event)
 
     def on_monitor_button(self, event):
         if  not self.DataSource == None :
@@ -661,8 +586,8 @@ class GraphFrame(wx.Frame):
 
         if block["OK"]:
         
-# no battery voltage in bongo95 outfile, channel 7 in raw data Vstr = line[7]
-# need to add density calculation
+
+
 # we will only save the  data when the graph is running
 # this part is the data that is plotted on the graph.. NOTE at the moment there is a
 # 1 sec(unit) per scan assumption here since there is no time variable , it is plotting against
@@ -690,10 +615,11 @@ class GraphFrame(wx.Frame):
               self.on_monitor_button(wx.EVT_BUTTON)
               self.on_update_monitor_button(wx.EVT_UPDATE_UI)
               if self.RT_source :
-                  self.on_stop_rt(1)
-                  self.message_box("DATA SOURCE HAS STOPPED or MISSING\nIF THIS IS UNEXPECTED CHECK CABLING etc\n ...CLOSING CONNECTION...")
+                    self.on_stop_rt(1)
+                    self.message_box("DATA SOURCE HAS STOPPED or MISSING\nIF THIS IS UNEXPECTED CHECK CABLING etc\n ...CLOSING CONNECTION...")
               else :
-                   self.on_stop_arc(1)
+                    self.on_stop_arc(1)
+                    return()
 
 
 # these are the data displayed on the monitor line
@@ -714,7 +640,7 @@ class GraphFrame(wx.Frame):
            self.et_text.Data_text.SetValue('{:>5.4}'.format(block["Et"]))
 #           self.ctd_clock_text.Data_text.SetValue(scan["ctdclock"])
         
-           if self.GraphRun and self.runlogfile :
+           if self.GraphRun and self.runlogfile and self.RT_source :
                self.ScanNum+=1
                xdatetime = '{:>8.8}'.format(str(datetime.datetime.now().time()))
 
@@ -731,10 +657,12 @@ class GraphFrame(wx.Frame):
     def save_file_dialog(self):
 
         """Save contents of output window."""
-        outfilename = None
-        dlg = wx.FileDialog(None, "Save File As...", "", "", "BONGO Dat-File|*.dat|All Files|*",  wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
+        outfilename = self.basename
+        dlg = wx.FileDialog(None, "Save File As...","", outfilename, "BONGO Dat-File|*.dat|All Files|*",  wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
         if dlg.ShowModal() ==  wx.ID_OK:
             outfilename = dlg.GetPath()
+        else:
+            return False
         dlg.Destroy()
         return (outfilename)
     
@@ -807,7 +735,7 @@ class GraphFrame(wx.Frame):
             self.WriteHeader(self.runlogfile)
         else:
             self.flash_status_message("NOT LOGGING TO FILE")
-            self.LogFileName = "NOT LOGGING TO FILE"
+            return()
 
 
         if self.DataSource == None:
@@ -892,6 +820,7 @@ class GraphFrame(wx.Frame):
         enabled = menubar.IsEnabled(ID_STOP_RT)
         menubar.Enable(ID_STOP_RT,not enabled)
         menubar.Enable(ID_SER_CONF, True)
+        menubar.EnableTop(2, True)  # lock out arc playback while rt running
 
         self.m_initlogger.Enable(False)
         self.m_getctdstatus.Enable(False)
@@ -921,14 +850,16 @@ class GraphFrame(wx.Frame):
             self.data["Pres"]=[0]
             self.data["Temp"]=[0]
             self.data["Et"]=[0]
-            self.DataSource = self.datagen 
+            self.DataSource = BFT.read_from_file(FileName,self.BQueue)
+            self.DataSource.start()
 
     def on_stop_arc (self, event):
         if self.MonitorRun:
              self.on_monitor_button(event)
+
+        self.DataSource.shut_down()
         self.ARC_source = False
         self.DataSource = None
-        self.datagen.close_infile()
 
         menubar = self.GetMenuBar()
         enabled = menubar.IsEnabled(ID_START_ARC)
@@ -949,21 +880,20 @@ class GraphFrame(wx.Frame):
 
 
     def on_set_base_header(self,event):
-        xx = ShipTrip_Dialog(self,self.hd1["SHIP"],self.hd1["TRIP"],self.hd1["STN"])
+        xx = ShipTrip_Dialog(self)
 
-
-        xx.SetBase(self.hship,self.hd1["TRIP"],self.hd1["STN"])
+        xx.SetBase(self.ShipTripSet["SHIP"],self.ShipTripSet["YEAR"],self.ShipTripSet["TRIP"],self.ShipTripSet["SET"])
         res=xx.ShowModal()
+
         if res == wx.ID_OK:
+            self.ShipTripSet["SHIP"] = xx.GetShip()
+            self.ShipTripSet["YEAR"] = xx.GetYear()
+            self.ShipTripSet["TRIP"] = xx.GetTrip()
+            self.ShipTripSet["SET"] = xx.GetStn()
+            self.basename = self.make_base_name()
 
- 
-            self.hd1["SHIP"] = xx.GetShip()
-            self.hship = xx.GetShip()
-            self.hd1["TRIP"] = xx.GetTrip()
-            self.hd1["STN"] = xx.GetStn()
-
-            self.hship="LL"
-
+#            self.setup_new_tow()
+            self.save_cfg(self.ser)
             xx.Destroy()
 
 
@@ -976,14 +906,22 @@ class GraphFrame(wx.Frame):
 #                self.make_SYTS(self.basename)
                 self.comPort = fp.readline().rstrip()
                 ser.port = self.comPort
-                commsettings = json.load(fp)
+
+                line = fp.readline().rstrip()
+                commsettings = json.loads(line)
+
+                line = fp.readline().rstrip()
+                self.ShipTripSet = json.loads(line)
+
+
             try:
                 ser.apply_settings(commsettings)
+                self.basename = self.make_base_name()
             except:
                 ser.applySettingsDict(commsettings)  # pyserial pre v 3.0
 
             fp.close()
-        except:
+        except :
             return (False)
 
         return (True)
@@ -1001,6 +939,8 @@ class GraphFrame(wx.Frame):
             fp.write(ser.port)
             fp.write('\n')
             fp.write(json.dumps(comsettings))
+            fp.write('\n')
+            fp.write(json.dumps(self.ShipTripSet))
         fp.close()
 
         # Configure serial port, requires our serial instance, make sure port is closed before calling
@@ -1034,8 +974,8 @@ class GraphFrame(wx.Frame):
 
         xtime = '{:>5.5}'.format(str(datetime.datetime.now().time()))
         xdate = '{:>12.12}'.format(str(datetime.datetime.now().date()))
-        CTDID='S4018'
-        hdr1_out= self.hd1["SHIP"].strip().zfill(2)+ self.hd1["TRIP"].strip().zfill(3)+ self.hd1["STN"].strip().zfill(3)
+        CTDID= self.CTDSN
+        hdr1_out= self.ShipTripSet["SHIP"].strip().zfill(2)+ self.ShipTripSet["TRIP"].strip().zfill(3)+ self.ShipTripSet["SET"].strip().zfill(3)
         fp.write("NAFC_Y2K_HEADER\n")
         fp.write (hdr1_out+"                    "+xdate+" "+xtime+"      "+CTDID+"     O                1\n")
         fp.write (hdr1_out+" 000000 01.00 A 12 #ZEPTCSM------------              000 0000 0000 000 4\n")
@@ -1047,8 +987,7 @@ class GraphFrame(wx.Frame):
         self.flash_status_message("Initiizing CTD - Deleting internal Stored casts")
         if self.ser.isOpen():
             if self.DataSource != None:
-                self.DataSource.send_InitLogging()
-                status = "OK"
+                status = self.DataSource.send_InitLogging()
             else:
                 status = "Data Source not present"
         else :
@@ -1127,7 +1066,9 @@ class GraphFrame(wx.Frame):
 #        else:
 #            return (False)
 
-
+    def make_base_name(self):
+        return (self.ShipTripSet["SHIP"] + '-' + self.ShipTripSet["YEAR"] + '-' + self.ShipTripSet["TRIP"] + '-' +
+                self.ShipTripSet["SET"])
 
     def OnAbout(self,event):
         """ Show About Dialog """
@@ -1146,9 +1087,9 @@ class GraphFrame(wx.Frame):
 
         info.SetName(TITLE)
         info.SetVersion(VERSION)
-        info.SetDevelopers (["D. Senciall",
-                             "\nBiological & Physical Oceanography Section",
-                             "\n NWAFC, Nl region-DFO, Gov. of Canada"])
+        info.SetDevelopers (["Dave Senciall",
+                             "\nScience Branch, NorthWest Atlantic Fisheies Centre",
+                             "\nDept. of Fisheries & Oceans"," Government of Canada"])
         info.SetCopyright ("Note: Some elements based on open community code:\nSee Source for credits")
 #        info.SetDescription (desc % (py_version, wx_info))
         wx.adv.AboutBox(info)
@@ -1158,91 +1099,6 @@ class GraphFrame(wx.Frame):
 #        def __init__( self, parent ):
 #                wx.Dialog.__init__ ( self, parent, id = wx.ID_ANY, title = u"WinAquire Header Editor", pos = wx.DefaultPosition, size = wx.DefaultSize, style = wx.DEFAULT_DIALOG_STYLE )
 
-
-class ShipTrip_Dialog(wx.Dialog) :
-    def __init__(self,parent,ship,trip,stn):
-        wx.Dialog.__init__ ( self, parent,title = u"ShipTrpStn" )
-#        super(ShipTrip_Dialog,self).__init__(parent)
-        
-        self.panel = EntryPanel(self,ship,trip,stn )
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.panel,1,wx.EXPAND)
-        self.SetSizer(sizer)
-        self.SetInitialSize()
-    def SetBase(self,ship,trip,stn):
-        self.panel.SetBase(ship,trip,stn)
-
-    def GetShip(self):
-            return (self.panel.GetShip())
-    def GetTrip(self):
-            return (self.panel.GetTrip())
-    def GetStn(self):
-            return (self.panel.GetStn())
-
-class EntryPanel (wx.Panel):
-      
-    def __init__( self, parent,ship,trip,stn ):
-            super(EntryPanel,self).__init__(parent)
-#            wx.Panel.__init__ ( self, parent, id = wx.ID_ANY, title = u"SET BASE HEADER", pos = wx.DefaultPosition, size = wx.DefaultSize, style = wx.DEFAULT_DIALOG_STYLE )
-
-            self.ship = wx.TextCtrl(self)
-#            self._ship = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 35,-1 ) )
-            self.ship.SetMaxLength( 2 ) 
-            self.ship.SetFont( wx.Font( 12, 74, 90, 92, False, "Arial" ) )
-            self._trip = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 57,-1 ) )
-            self._trip.SetMaxLength( 3 ) 
-            self._trip.SetFont( wx.Font( 12, 74, 90, 92, False, "Arial" ) )
-            self._stn = wx.TextCtrl( self, wx.ID_ANY, wx.EmptyString, wx.DefaultPosition, wx.Size( 57,-1 ) )
-            self._stn.SetMaxLength( 3 ) 
-            self._stn.SetFont( wx.Font( 12, 74, 90, 92, False, "Arial" ) )
-                
-                
-               
-#                SHPTRPSTN_GRID.Add( self.TRIP, 0, wx.ALL, 5 )
-
-
-#            self._ship = wx.TextCtrl(self)
-#            self._trip = wx.TextCtrl(self)
-#            self._stn = wx.TextCtrl(self)
-
-            sizer = wx.FlexGridSizer(3,2,8,8)
-            sizer.Add(wx.StaticText (self,label="SHIP:"),0,wx.ALIGN_CENTER_VERTICAL)
-            sizer.Add(self.ship,0,wx.EXPAND)
-            sizer.Add(wx.StaticText (self,label="TRIP:"),0,wx.ALIGN_CENTER_VERTICAL)
-            sizer.Add(self._trip,0,wx.EXPAND)
-            sizer.Add(wx.StaticText (self,label="STN:"),0,wx.ALIGN_CENTER_VERTICAL)
-            sizer.Add(self._stn,0,wx.EXPAND)
-
-            msizer = wx.BoxSizer(wx.VERTICAL)
-            msizer.Add(sizer,1,wx.EXPAND|wx.ALL,20)
-            btnszr = wx.StdDialogButtonSizer()
-            button = wx.Button(self,wx.ID_OK)
-            button.SetDefault()
-            btnszr.AddButton(button)
-            msizer.Add(btnszr, 0, wx.ALIGN_CENTER|wx.ALL,12)
-            btnszr.Realize()
-
-            self.SetSizer(msizer)
-
-            self.ship.SetValue(ship)
-            self._trip.SetValue(trip)
-            self._stn.SetValue(stn)
-            
-    def SetBase (self,ship,trip,stn):
-            self.ship.SetValue(ship)
-            self._trip.SetValue(trip)
-            self._stn.SetValue(stn)    
-        
-    def GetBase(self):
-            return self.ship.GetValue(),self._trip.GetValue(),self._stn.GetValue()
-
-    def GetShip(self):
-                return self.ship.GetValue()
-    def GetTrip(self):
-                return self._trip.GetValue()
-    def GetStn(self):
-                return self._stn.GetValue()
     
 
 #***************************************************************************************
