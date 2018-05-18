@@ -999,7 +999,8 @@ class GraphFrame(wx.Frame):
         self.flash_status_message("Initiizing CTD - Deleting internal Stored casts")
         if self.ser.isOpen():
             if self.DataSource != None:
-                status = self.DataSource.send_InitLogging()
+                self.DataSource.send_InitLogging()
+                status = "INITIZATION SEND, USED GET STATUS TO CHECK"
             else:
                 status = "Data Source not present"
         else :
