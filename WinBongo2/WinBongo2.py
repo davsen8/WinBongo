@@ -195,7 +195,7 @@ class GraphFrame(wx.Frame):
         self.m_initlogger = menu_ctd_control.Append(ID_INIT, "Initial Logger", "Clear ctd Memmory")
         self.Bind(wx.EVT_MENU, self.on_init_logger, self.m_initlogger)
         menu_realtime.AppendSeparator()
-        self.m_sendstop = menu_ctd_control.Append(ID_STOP, "Force a Stop on Data", "CTD STOP ")
+        self.m_sendstop = menu_ctd_control.Append(ID_STOP, "Force a Stop/Reset", "CTD STOP/RESET TO PROFILER MODE")
         self.Bind(wx.EVT_MENU, self.on_sendstop, self.m_sendstop)
 
         menu_option = wx.Menu()
